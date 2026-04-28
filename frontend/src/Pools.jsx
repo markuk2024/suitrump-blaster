@@ -15,17 +15,13 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
 
   const fetchPools = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/pools');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${apiUrl}/pools`);
       const data = await response.json();
-      setPools(data.pools);
+      setPools(data.pools || []);
     } catch (error) {
       console.error('Error fetching pools:', error);
-      // Fallback to mock data
-      setPools([
-        { id: 'daily', name: 'Daily Pool', duration: '24h', entry_fee: '0.1 SUI', prize: '100 SUI', players: 45 },
-        { id: 'weekly', name: 'Weekly Pool', duration: '7d', entry_fee: '0.5 SUI', prize: '500 SUI', players: 128 },
-        { id: 'monthly', name: 'Monthly Pool', duration: '28d', entry_fee: '1 SUI', prize: '2000 SUI', players: 312 }
-      ]);
+      setPools([]); // Clear pools on error instead of showing mock data
     } finally {
       setLoading(false);
     }
