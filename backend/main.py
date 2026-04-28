@@ -66,11 +66,7 @@ def load_data():
         
         global_leaderboard = data.get("global_leaderboard", [])
         pool_leaderboards = defaultdict(list, {k: v for k, v in data.get("pool_leaderboards", {}).items()})
-        pool_data = data.get("pool_data", {
-            "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "Dynamic", "players": 0},
-            "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "Dynamic", "players": 0},
-            "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "Dynamic", "players": 0}
-        })
+        pool_data = data.get("pool_data", {})
         transactions = data.get("transactions", [])
         escrow_funds = defaultdict(float, {k: v for k, v in data.get("escrow_funds", {}).items()})
         pool_participants = defaultdict(list, {k: v for k, v in data.get("pool_participants", {}).items()})
@@ -100,11 +96,7 @@ def save_data():
 # In-memory storage (in production, use a database)
 global_leaderboard = []
 pool_leaderboards = defaultdict(list)  # pool_id -> list of scores
-pool_data = {
-    "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "Dynamic", "players": 0},
-    "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "Dynamic", "players": 0},
-    "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "Dynamic", "players": 0}
-}
+pool_data = {}
 
 # Transaction recording system
 transactions = []  # List of all transactions
