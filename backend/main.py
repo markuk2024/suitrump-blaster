@@ -395,6 +395,29 @@ async def get_balance(address: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/reset-data")
+async def reset_data():
+    """Reset all data - clear pools, scores, and transactions"""
+    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected
+    try:
+        global_leaderboard = []
+        pool_leaderboards = defaultdict(list)
+        pool_data = {}
+        transactions = []
+        escrow_funds = defaultdict(float)
+        pool_participants = defaultdict(list)
+        dev_fees_collected = defaultdict(float)
+        
+        # Clear the data file
+        if os.path.exists(DATA_FILE):
+            os.remove(DATA_FILE)
+        
+        save_data()
+        
+        return {"status": "success", "message": "All data has been reset"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/distribute-rewards")
 async def distribute_rewards(data: PayoutRequest):
     """Distribute rewards to winners of a pool"""
