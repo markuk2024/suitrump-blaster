@@ -408,9 +408,9 @@ function Game({ pool, walletAddress, onGameOver, onBack }) {
     const container = document.getElementById('game-container');
     if (!container) {
       console.error('Game container not found');
-      }
       isInitialized.current = false;
-    };
+    }
+  };
   }, [walletAddress, pool?.id]);
   
   return (
