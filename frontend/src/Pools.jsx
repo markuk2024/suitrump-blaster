@@ -15,26 +15,33 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
 
   const fetchPools = async () => {
     try {
-      let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      // Robust URL cleaning: trim whitespace and remove trailing slashes
-      apiUrl = apiUrl.trim().replace(/\/+$/, '');
+      let rawApiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      console.log('Original VITE_API_URL from env:', rawApiUrl);
       
-      // If it doesn't start with http, it's definitely not what we want
+      // Clean the URL: trim and remove ANY trailing slashes
+      let apiUrl = rawApiUrl.trim().replace(/\/+$/, '');
+      
+      // Force absolute URL if it seems relative or missing protocol
       if (apiUrl && !apiUrl.startsWith('http')) {
         apiUrl = `https://${apiUrl}`;
       }
+      
+      const finalUrl = `${apiUrl}/pools`;
+      console.log('Attempting to fetch pools from FINAL URL:', finalUrl);
 
-      console.log('Fetching pools from:', `${apiUrl}/pools`);
-      const response = await fetch(`${apiUrl}/pools`);
+      const response = await fetch(finalUrl);
       
       if (!response.ok) {
+        console.error(`Backend returned ${response.status} for ${finalUrl}`);
+        // If we get a 404, it might mean the backend is down or the path is wrong
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
+      console.log('Successfully fetched pools data:', data);
       setPools(data.pools || []);
     } catch (error) {
-      console.error('Error fetching pools:', error);
+      console.error('CRITICAL: Error fetching pools:', error);
       setPools([]); 
     } finally {
       setLoading(false);
