@@ -60,6 +60,15 @@ def load_data():
             with open(DATA_FILE, 'r') as f:
                 data = json.load(f)
             print("Data loaded from local file")
+            
+            # Clear old mock pools if they exist
+            pool_data_loaded = data.get("pool_data", {})
+            if "daily" in pool_data_loaded or "weekly" in pool_data_loaded or "monthly" in pool_data_loaded:
+                print("Detected old mock pools - clearing them")
+                data["pool_data"] = {}
+                # Delete the old data file to force fresh start
+                os.remove(DATA_FILE)
+                data = {}
         else:
             print("No existing data found, starting fresh")
             data = {}
