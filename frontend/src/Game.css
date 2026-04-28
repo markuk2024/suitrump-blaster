@@ -1,0 +1,40 @@
+.game-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.game-canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 400px;
+  position: relative;
+}
+
+.game-canvas canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.game-info {
+  background: rgba(0, 0, 0, 0.5);
+  padding: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.game-info p {
+  margin: 8px 0;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.game-canvas {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="8" fill="none" stroke="white" stroke-width="2"/><line x1="16" y1="0" x2="16" y2="32" stroke="white" stroke-width="2"/><line x1="0" y1="16" x2="32" y2="16" stroke="white" stroke-width="2"/></svg>') 16 16, crosshair;
+}
+
+.game-canvas canvas {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="8" fill="none" stroke="white" stroke-width="2"/><line x1="16" y1="0" x2="16" y2="32" stroke="white" stroke-width="2"/><line x1="0" y1="16" x2="32" y2="16" stroke="white" stroke-width="2"/></svg>') 16 16, crosshair;
+}

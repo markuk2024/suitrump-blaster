@@ -1,0 +1,54 @@
+.pools-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pools-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.pool-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 20px;
+  margin-bottom: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.pool-card h3 {
+  font-size: 20px;
+  margin-bottom: 15px;
+  color: #667eea;
+}
+
+.pool-info p {
+  margin: 8px 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+}
+
+.enter-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 20px;
+  font-size: 16px;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 15px;
+  box-shadow: 0 4px 15px rgba(240, 147, 251, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.enter-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(240, 147, 251, 0.6);
+}
+
+.enter-btn:active {
+  transform: scale(0.98);
+}

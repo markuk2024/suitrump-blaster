@@ -1,0 +1,80 @@
+import React, { useState, useEffect } from 'react';
+import './Leaderboard.css';
+
+function Leaderboard({ onBack }) {
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pools, setPools] = useState({});
+
+  useEffect(() => {
+    fetchLeaderboard();
+    fetchPools();
+  }, []);
+
+  const fetchPools = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/pools');
+      const data = await response.json();
+      const poolsMap = {};
+      data.pools.forEach(pool => {
+        poolsMap[pool.id] = pool.name;
+      });
+      setPools(poolsMap);
+    } catch (error) {
+      console.error('Error fetching pools:', error);
+    }
+  };
+
+  const fetchLeaderboard = async () => {
+    setLoading(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${apiUrl}/leaderboard`);
+      const data = await response.json();
+      setLeaderboard(data.leaderboard || []);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      // Fallback to mock data
+      setLeaderboard([
+        { wallet: '0x1234567890abcdef', score: 1500, pool_id: 'daily' },
+        { wallet: '0xabcdef1234567890', score: 1200, pool_id: 'daily' },
+        { wallet: '0x567890abcdef1234', score: 950, pool_id: 'weekly' },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="leaderboard-wrapper">
+      <button className="back-btn" onClick={onBack}>← Back</button>
+      <h2 className="section-title">🏆 Leaderboard</h2>
+      
+      {loading ? (
+        <div className="loading">Loading...</div>
+      ) : leaderboard.length === 0 ? (
+        <div className="empty-state">No scores yet. Be the first!</div>
+      ) : (
+        <div className="leaderboard-list">
+          {leaderboard.map((entry, index) => (
+            <div 
+              key={index} 
+              className={`leaderboard-item rank-${index + 1}`}
+            >
+              <div className="rank">#{index + 1}</div>
+              <div className="wallet">
+                {entry.wallet.slice(0, 8)}...{entry.wallet.slice(-4)}
+              </div>
+              <div className="pool">
+                {entry.pool_id ? pools[entry.pool_id] || 'Unknown Pool' : 'General'}
+              </div>
+              <div className="score">{entry.score} pts</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default Leaderboard;
