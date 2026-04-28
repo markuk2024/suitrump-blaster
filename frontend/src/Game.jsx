@@ -410,7 +410,6 @@ function Game({ pool, walletAddress, onGameOver, onBack }) {
       console.error('Game container not found');
       isInitialized.current = false;
     }
-  };
   }, [walletAddress, pool?.id]);
   
   return (
