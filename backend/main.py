@@ -7,8 +7,6 @@ import json
 from collections import defaultdict
 import os
 import subprocess
-import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
 from config import config
 
 app = FastAPI(title="Sui Blaster Backend")
@@ -51,37 +49,14 @@ class PayoutRequest(BaseModel):
     num_winners: int = 10  # Number of top players to pay out
 
 # Data persistence
-S3_BUCKET = os.getenv("S3_BUCKET_NAME", "sui-blaster-data")
 DATA_FILE = "data.json"
 
-# Initialize S3 client
-s3_client = None
-use_s3 = False
-
-try:
-    s3_client = boto3.client('s3')
-    # Test S3 connection
-    s3_client.head_bucket(Bucket=S3_BUCKET)
-    use_s3 = True
-    print(f"Using S3 for data persistence: {S3_BUCKET}")
-except (NoCredentialsError, ClientError) as e:
-    print(f"S3 not available, falling back to local file storage: {e}")
-    use_s3 = False
-
 def load_data():
-    """Load data from S3 or local JSON file"""
+    """Load data from local JSON file"""
     global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected
     
     try:
-        if use_s3:
-            try:
-                response = s3_client.get_object(Bucket=S3_BUCKET, Key=DATA_FILE)
-                data = json.loads(response['Body'].read())
-                print("Data loaded from S3")
-            except s3_client.exceptions.NoSuchKey:
-                print("No existing data in S3, starting fresh")
-                data = {}
-        elif os.path.exists(DATA_FILE):
+        if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r') as f:
                 data = json.load(f)
             print("Data loaded from local file")
@@ -105,7 +80,7 @@ def load_data():
         print("Starting with empty data")
 
 def save_data():
-    """Save data to S3 or local JSON file"""
+    """Save data to local JSON file"""
     data = {
         "global_leaderboard": global_leaderboard,
         "pool_leaderboards": dict(pool_leaderboards),
@@ -116,18 +91,9 @@ def save_data():
         "dev_fees_collected": dict(dev_fees_collected)
     }
     try:
-        if use_s3:
-            s3_client.put_object(
-                Bucket=S3_BUCKET,
-                Key=DATA_FILE,
-                Body=json.dumps(data, indent=2),
-                ContentType='application/json'
-            )
-            print("Data saved to S3")
-        else:
-            with open(DATA_FILE, 'w') as f:
-                json.dump(data, f, indent=2)
-            print("Data saved to local file")
+        with open(DATA_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+        print("Data saved to local file")
     except Exception as e:
         print(f"Error saving data: {e}")
 
