@@ -13,7 +13,8 @@ function Leaderboard({ onBack }) {
 
   const fetchPools = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/pools');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${apiUrl}/pools`);
       const data = await response.json();
       const poolsMap = {};
       data.pools.forEach(pool => {
