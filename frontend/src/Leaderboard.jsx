@@ -13,7 +13,8 @@ function Leaderboard({ onBack }) {
 
   const fetchPools = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      apiUrl = apiUrl.replace(/\/$/, '');
       const response = await fetch(`${apiUrl}/pools`);
       const data = await response.json();
       const poolsMap = {};
@@ -29,7 +30,8 @@ function Leaderboard({ onBack }) {
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      apiUrl = apiUrl.replace(/\/$/, '');
       const response = await fetch(`${apiUrl}/leaderboard`);
       const data = await response.json();
       setLeaderboard(data.leaderboard || []);

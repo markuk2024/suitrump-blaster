@@ -61,13 +61,20 @@ def load_data():
                 data = json.load(f)
             print("Data loaded from local file")
             
-            # Clear old mock pools if they exist
+            # Clear old mock pools if they exist (only if they have the old fake prize values)
             pool_data_loaded = data.get("pool_data", {})
-            if "daily" in pool_data_loaded or "weekly" in pool_data_loaded or "monthly" in pool_data_loaded:
+            has_mock_data = False
+            for p in pool_data_loaded.values():
+                if p.get("prize") == "100 SUI" or p.get("players") == 45:
+                    has_mock_data = True
+                    break
+            
+            if has_mock_data:
                 print("Detected old mock pools - clearing them")
                 data["pool_data"] = {}
                 # Delete the old data file to force fresh start
-                os.remove(DATA_FILE)
+                if os.path.exists(DATA_FILE):
+                    os.remove(DATA_FILE)
                 data = {}
         else:
             print("No existing data found, starting fresh")
@@ -75,7 +82,11 @@ def load_data():
         
         global_leaderboard = data.get("global_leaderboard", [])
         pool_leaderboards = defaultdict(list, {k: v for k, v in data.get("pool_leaderboards", {}).items()})
-        pool_data = data.get("pool_data", {})
+        pool_data = data.get("pool_data", {
+            "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "0 SUI", "players": 0},
+            "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0},
+            "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0}
+        })
         transactions = data.get("transactions", [])
         escrow_funds = defaultdict(float, {k: v for k, v in data.get("escrow_funds", {}).items()})
         pool_participants = defaultdict(list, {k: v for k, v in data.get("pool_participants", {}).items()})
@@ -105,7 +116,11 @@ def save_data():
 # In-memory storage (in production, use a database)
 global_leaderboard = []
 pool_leaderboards = defaultdict(list)  # pool_id -> list of scores
-pool_data = {}
+pool_data = {
+    "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "0 SUI", "players": 0},
+    "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0},
+    "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0}
+}
 
 # Transaction recording system
 transactions = []  # List of all transactions

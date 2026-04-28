@@ -15,13 +15,15 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
 
   const fetchPools = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      // Ensure apiUrl doesn't end with a slash to avoid double slashes
+      apiUrl = apiUrl.replace(/\/$/, '');
       const response = await fetch(`${apiUrl}/pools`);
       const data = await response.json();
       setPools(data.pools || []);
     } catch (error) {
       console.error('Error fetching pools:', error);
-      setPools([]); // Clear pools on error instead of showing mock data
+      setPools([]); 
     } finally {
       setLoading(false);
     }
@@ -37,7 +39,8 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       const entryFee = pool.entry_fee || "0.1";
       const entryFeeMist = parseFloat(entryFee) * 1_000_000_000;
       const poolObjectId = pool.contract_id || "0x0";  // Smart contract pool object ID
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      apiUrl = apiUrl.replace(/\/$/, '');
       const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x0";
 
       const txb = new Transaction();
