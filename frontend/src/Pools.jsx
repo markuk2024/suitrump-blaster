@@ -16,9 +16,21 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
   const fetchPools = async () => {
     try {
       let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      // Ensure apiUrl doesn't end with a slash to avoid double slashes
-      apiUrl = apiUrl.replace(/\/$/, '');
+      // Robust URL cleaning: trim whitespace and remove trailing slashes
+      apiUrl = apiUrl.trim().replace(/\/+$/, '');
+      
+      // If it doesn't start with http, it's definitely not what we want
+      if (apiUrl && !apiUrl.startsWith('http')) {
+        apiUrl = `https://${apiUrl}`;
+      }
+
+      console.log('Fetching pools from:', `${apiUrl}/pools`);
       const response = await fetch(`${apiUrl}/pools`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setPools(data.pools || []);
     } catch (error) {

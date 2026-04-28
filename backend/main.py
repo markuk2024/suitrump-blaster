@@ -11,16 +11,8 @@ from config import config
 import httpx
 
 # Sui Imports
-try:
-    from pysui import SuiConfig, SyncClient, handle_result
-    from pysui.abstracts import SignatureScheme
-    from pysui.sui_types.address import SuiAddress
-    from pysui.sui_types.scalars import SuiString, SuiU64
-    from pysui.sui_types.collections import SuiArray
-    HAS_PYSUI = True
-except ImportError:
-    print("pysui not installed - using simulation mode")
-    HAS_PYSUI = False
+HAS_PYSUI = False
+
 
 app = FastAPI(title="Sui Blaster Backend")
 
