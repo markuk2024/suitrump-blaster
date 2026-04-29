@@ -4,7 +4,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import './Pools.css';
 
 function Pools({ walletAddress, onSelectPool, onBack }) {
-  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
   const [pools, setPools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(null);
@@ -86,6 +86,10 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       });
 
       console.log('Transaction result:', result);
+
+      if (!result || !result.digest) {
+        throw new Error('Transaction failed: No digest returned');
+      }
 
       // Notify backend about the join (for tracking only)
       const response = await fetch(`${apiUrl}/join-pool`, {
