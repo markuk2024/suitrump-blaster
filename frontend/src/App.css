@@ -46,7 +46,9 @@
 .main-content {
   flex: 1;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling for iOS */
   padding: 20px;
+  position: relative;
 }
 
 .home-view {
