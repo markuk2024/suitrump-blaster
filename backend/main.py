@@ -932,9 +932,24 @@ def get_dev_fees():
         "fees_by_pool": fees_by_pool
     }
 
+async def get_pool_object_balance(pool_object_id: str):
+    """Query actual SUI balance inside a pool Move object on-chain"""
+    try:
+        res = await call_sui_rpc("sui_getObject", [pool_object_id, {"showContent": True}])
+        if "result" in res and "data" in res["result"]:
+            fields = res["result"]["data"].get("content", {}).get("fields", {})
+            bal = (fields.get("balance") or fields.get("pool_balance") or
+                   fields.get("escrow") or fields.get("total_balance"))
+            if bal:
+                return int(bal) / 1_000_000_000
+        return 0
+    except Exception as e:
+        print(f"Balance query error: {e}")
+        return 0
+
 @app.post("/admin/force-payout", dependencies=[Depends(dev_wallet_auth)])
 async def admin_force_payout(pool_id: str):
-    """Force immediate payout for a pool - adds dev wallet as winner if no scores exist, then triggers on-chain distribution"""
+    """Force payout - queries real chain balance, adds dev wallet as winner, distributes"""
     if pool_id not in pool_data:
         raise HTTPException(status_code=404, detail="Pool not found")
     
@@ -966,12 +981,24 @@ async def admin_force_payout(pool_id: str):
         pool_data[pool_id]["players"] += 1
         save_data()
     
+    # Query REAL on-chain balance and restore escrow so distribution works
+    pool_object_id = pool_data[pool_id].get("contract_id", "0x0")
+    real_balance = await get_pool_object_balance(pool_object_id) if pool_object_id != "0x0" else 0
+    
+    if real_balance > 0:
+        print(f"FORCE PAYOUT: Restoring escrow to real on-chain balance: {real_balance} SUI")
+        escrow_funds[pool_id] = real_balance
+        save_data()
+    else:
+        print(f"FORCE PAYOUT: On-chain balance query returned 0 or failed for {pool_object_id}")
+    
     # Trigger distribution
     result = await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
     
     return {
         "status": "force_payout_triggered",
         "pool_id": pool_id,
+        "real_balance_queried": real_balance,
         "result": result,
         "message": "If on-chain transaction succeeded, funds have been distributed. Check Sui Explorer for the transaction digest."
     }
