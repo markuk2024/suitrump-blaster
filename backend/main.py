@@ -96,9 +96,9 @@ def load_data():
         global_leaderboard = data.get("global_leaderboard", [])
         pool_leaderboards = defaultdict(list, {k: v for k, v in data.get("pool_leaderboards", {}).items()})
         pool_data = data.get("pool_data", {
-            "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "0 SUI", "players": 0, "contract_id": "0x0"},
-            "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0, "contract_id": "0x0"},
-            "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0, "contract_id": "0x0"}
+            "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.DAILY_POOL_ID},
+            "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.WEEKLY_POOL_ID},
+            "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.MONTHLY_POOL_ID}
         })
         transactions = data.get("transactions", [])
         escrow_funds = defaultdict(float, {k: v for k, v in data.get("escrow_funds", {}).items()})
@@ -130,9 +130,9 @@ def save_data():
 global_leaderboard = []
 pool_leaderboards = defaultdict(list)  # pool_id -> list of scores
 pool_data = {
-    "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "0 SUI", "players": 0, "contract_id": "0x0"},
-    "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0, "contract_id": "0x0"},
-    "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0, "contract_id": "0x0"}
+    "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.DAILY_POOL_ID},
+    "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.WEEKLY_POOL_ID},
+    "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.MONTHLY_POOL_ID}
 }
 
 # Transaction recording system

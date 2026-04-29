@@ -15,5 +15,10 @@ class Config:
     DEV_WALLET_ADDRESS: str = os.getenv("DEV_WALLET_ADDRESS", "0x4c2891f70f1317fed1198140e0f06f49593c82558b2b467e1717c23fee9131a6")
     POOL_ENTRY_FEE: int = 100_000_000  # 0.1 SUI in MIST
     ADMIN_PRIVATE_KEY: str = os.getenv("ADMIN_PRIVATE_KEY", "")
+    
+    # Real On-chain Pool Object IDs
+    DAILY_POOL_ID: str = os.getenv("DAILY_POOL_ID", "0x0")
+    WEEKLY_POOL_ID: str = os.getenv("WEEKLY_POOL_ID", "0x0")
+    MONTHLY_POOL_ID: str = os.getenv("MONTHLY_POOL_ID", "0x0")
 
 config = Config()
