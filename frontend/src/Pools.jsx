@@ -81,14 +81,20 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
         ]
       });
 
+      console.log('Executing transaction...');
       const result = await signAndExecuteTransaction({
         transaction: txb,
       });
 
-      console.log('Transaction result:', result);
+      console.log('Transaction executed. Result:', result);
 
-      if (!result || !result.digest) {
-        throw new Error('Transaction failed: No digest returned');
+      if (!result) {
+        throw new Error('Transaction result is undefined');
+      }
+
+      if (!result.digest) {
+        console.error('Full result object:', JSON.stringify(result));
+        throw new Error('Transaction result missing digest');
       }
 
       // Notify backend about the join (for tracking only)
@@ -125,7 +131,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
     return (
       <div className="pools-container">
         <button className="back-btn" onClick={onBack}>← Back</button>
-        <h2 className="pools-title">Competition Pools</h2>
+        <h2 className="pools-title">Competition Pools v2</h2>
         <p>Loading pools...</p>
       </div>
     );
@@ -134,7 +140,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
   return (
     <div className="pools-container">
       <button className="back-btn" onClick={onBack}>← Back</button>
-      <h2 className="pools-title">Competition Pools</h2>
+      <h2 className="pools-title">Competition Pools v2</h2>
       <div className="pools-grid">
         {pools.map(pool => (
           <div key={pool.id} className="pool-card">
