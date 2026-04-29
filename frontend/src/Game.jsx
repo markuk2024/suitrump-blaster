@@ -413,12 +413,28 @@ const config = {
 function Game({ pool, walletAddress, onGameOver, onBack }) {
   const gameRef = useRef(null);
   const isInitialized = useRef(false);
+  const scoreSubmitted = useRef(false);
   
   useEffect(() => {
     if (isInitialized.current) {
       return;
     }
     isInitialized.current = true;
+    
+    // Notify backend that game session has started
+    const apiUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+    fetch(`${apiUrl}/start-game`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wallet: walletAddress,
+        pool_id: pool?.id || 'daily'
+      })
+    }).then(r => r.json()).then(data => {
+      console.log('Game session started:', data);
+    }).catch(err => {
+      console.warn('Failed to notify backend of game start:', err);
+    });
     
     // Initialize score callback
     window.submitScoreCallback = async (score, duration) => {
@@ -440,6 +456,7 @@ function Game({ pool, walletAddress, onGameOver, onBack }) {
         });
         const data = await response.json();
         console.log('Score submission result:', data);
+        scoreSubmitted.current = true;
         onGameOver(score);
       } catch (error) {
         console.error('Error submitting score:', error);
@@ -457,6 +474,21 @@ function Game({ pool, walletAddress, onGameOver, onBack }) {
       }
       isInitialized.current = false;
       window.submitScoreCallback = null;
+      
+      // If player left without submitting score, notify backend of abandoned session
+      if (!scoreSubmitted.current && walletAddress) {
+        const apiUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+        fetch(`${apiUrl}/abandon-game`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            wallet: walletAddress,
+            pool_id: pool?.id || 'daily'
+          })
+        }).catch(err => {
+          console.warn('Failed to notify backend of abandoned game:', err);
+        });
+      }
     };
   }, [walletAddress, pool?.id]);
   

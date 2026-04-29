@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
@@ -32,6 +32,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Admin auth: only the dev wallet can access sensitive endpoints
+async def dev_wallet_auth(x_dev_wallet: str = Header(None, alias="X-Dev-Wallet")):
+    dev = config.DEV_WALLET_ADDRESS
+    if not x_dev_wallet or x_dev_wallet.strip().lower() != dev.lower():
+        raise HTTPException(status_code=403, detail="Forbidden: dev wallet required")
+    return x_dev_wallet
+
 class ScoreData(BaseModel):
     wallet: str
     score: int
@@ -64,9 +71,38 @@ class PayoutRequest(BaseModel):
 # Data persistence
 DATA_FILE = "data.json"
 
+def _migrate_participants(participants):
+    """Migrate old string-only participant lists to rich dict records"""
+    migrated = []
+    now = int(time.time())
+    for p in participants:
+        if isinstance(p, str):
+            migrated.append({
+                "wallet": p,
+                "joined_at": now,
+                "games_played": 0,
+                "best_score": 0,
+                "total_score": 0,
+                "last_active": now
+            })
+        elif isinstance(p, dict):
+            migrated.append(p)
+    return migrated
+
+def get_pool_wallets(pool_id):
+    """Extract wallet addresses from participant records"""
+    participants = pool_participants.get(pool_id, [])
+    wallets = []
+    for p in participants:
+        if isinstance(p, str):
+            wallets.append(p)
+        elif isinstance(p, dict):
+            wallets.append(p.get("wallet", ""))
+    return wallets
+
 def load_data():
     """Load data from local JSON file"""
-    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, pool_start_times
+    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, pool_start_times, active_games, pool_history
     
     try:
         if os.path.exists(DATA_FILE):
@@ -93,8 +129,13 @@ def load_data():
         
         transactions = data.get("transactions", [])
         escrow_funds = defaultdict(float, {k: v for k, v in data.get("escrow_funds", {}).items()})
-        pool_participants = defaultdict(list, {k: v for k, v in data.get("pool_participants", {}).items()})
+        raw_participants = data.get("pool_participants", {})
+        pool_participants = defaultdict(list, {k: _migrate_participants(v) for k, v in raw_participants.items()})
         dev_fees_collected = defaultdict(float, {k: v for k, v in data.get("dev_fees_collected", {}).items()})
+        
+        # Load active games and pool history
+        active_games.update(data.get("active_games", {}))
+        pool_history.extend(data.get("pool_history", []))
         
         # Load pool start times or initialize them
         loaded_start_times = data.get("pool_start_times", {})
@@ -118,7 +159,9 @@ def save_data():
         "escrow_funds": dict(escrow_funds),
         "pool_participants": dict(pool_participants),
         "dev_fees_collected": dict(dev_fees_collected),
-        "pool_start_times": pool_start_times
+        "pool_start_times": pool_start_times,
+        "active_games": dict(active_games),
+        "pool_history": list(pool_history)
     }
     try:
         with open(DATA_FILE, 'w') as f:
@@ -139,8 +182,14 @@ pool_data = {
 # Transaction recording system
 transactions = []  # List of all transactions
 escrow_funds = defaultdict(float)  # pool_id -> total SUI held in escrow
-pool_participants = defaultdict(list)  # pool_id -> list of participant wallets
+pool_participants = defaultdict(list)  # pool_id -> list of participant dicts
 dev_fees_collected = defaultdict(float)  # pool_id -> total dev fees collected
+
+# Active game sessions tracking (frontend down resilience)
+active_games = {}  # wallet -> {pool_id, started_at, session_id}
+
+# Pool history for audit trail across resets
+pool_history = []  # List of past completed pool cycles
 
 # Sui RPC helper functions
 async def call_sui_rpc(method: str, params: List = None):
@@ -282,14 +331,47 @@ async def auto_distribute_task():
                 if now - start_time >= duration:
                     print(f"AUTOMATION: Pool {pool_id} has expired. Starting distribution...")
                     
+                    # Check for active games before distributing
+                    active_in_pool = [w for w, g in active_games.items() if g.get("pool_id") == pool_id and g.get("status") == "active"]
+                    if active_in_pool:
+                        print(f"AUTOMATION: Warning - {len(active_in_pool)} active games in {pool_id} pool. Waiting for them to complete...")
+                        # Wait an extra 5 minutes for active games to finish, then continue
+                        await asyncio.sleep(300)
+                        # Re-check after wait
+                        active_in_pool = [w for w, g in active_games.items() if g.get("pool_id") == pool_id and g.get("status") == "active"]
+                        if active_in_pool:
+                            print(f"AUTOMATION: Still {len(active_in_pool)} active games. Proceeding with distribution anyway.")
+                    
+                    # Archive current pool state before any reset (preserves record even if distribution fails)
+                    pool_history.append({
+                        "pool_id": pool_id,
+                        "expired_at": now,
+                        "start_time": start_time,
+                        "final_leaderboard": pool_leaderboards.get(pool_id, [])[:10],
+                        "final_participants": [p.get("wallet") if isinstance(p, dict) else p for p in pool_participants.get(pool_id, [])],
+                        "escrow_balance": escrow_funds.get(pool_id, 0),
+                        "active_sessions_at_close": active_in_pool,
+                        "auto_distribution": True
+                    })
+                    
                     # Call the distribution logic
                     # We wrap this in a PayoutRequest object to reuse the existing logic
-                    await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
+                    try:
+                        await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
+                    except Exception as dist_err:
+                        print(f"AUTOMATION: Distribution failed for {pool_id}: {dist_err}")
                     
                     # Reset pool for the next period
                     pool_start_times[pool_id] = now
                     pool_leaderboards[pool_id] = []
                     pool_participants[pool_id] = []
+                    
+                    # Clear completed/abandoned game sessions for this pool
+                    for wallet in list(active_games.keys()):
+                        if active_games[wallet].get("pool_id") == pool_id:
+                            del active_games[wallet]
+                    
+                    save_data()
                     print(f"AUTOMATION: Pool {pool_id} reset for new period.")
             
             # Check every hour
@@ -327,7 +409,7 @@ def submit_score(data: ScoreData):
     
     # Anti-cheat: Check if player actually joined the pool
     if data.pool_id and data.pool_id != "global":
-        if data.wallet not in pool_participants.get(data.pool_id, []):
+        if data.wallet not in get_pool_wallets(data.pool_id):
             raise HTTPException(status_code=403, detail="Must join and pay for the pool before submitting a score")
     
     # Add to global leaderboard
@@ -348,6 +430,22 @@ def submit_score(data: ScoreData):
             "game_duration": data.game_duration
         })
         pool_leaderboards[data.pool_id].sort(key=lambda x: x["score"], reverse=True)
+        
+        # Update participant stats in pool_participants
+        for p in pool_participants[data.pool_id]:
+            if isinstance(p, dict) and p.get("wallet") == data.wallet:
+                p["games_played"] = p.get("games_played", 0) + 1
+                p["total_score"] = p.get("total_score", 0) + data.score
+                if data.score > p.get("best_score", 0):
+                    p["best_score"] = data.score
+                p["last_active"] = int(time.time())
+                break
+    
+    # Mark active game as completed if present
+    if data.wallet in active_games:
+        active_games[data.wallet]["status"] = "completed"
+        active_games[data.wallet]["ended_at"] = int(time.time())
+        active_games[data.wallet]["final_score"] = data.score
     
     global_leaderboard.sort(key=lambda x: x["score"], reverse=True)
     top = global_leaderboard[:10]
@@ -397,7 +495,7 @@ async def join_pool(data: PoolJoin):
         raise HTTPException(status_code=404, detail="Pool not found")
     
     # Check if wallet is already in this pool
-    if data.wallet in pool_participants[data.pool_id]:
+    if data.wallet in get_pool_wallets(data.pool_id):
         raise HTTPException(status_code=400, detail="Already joined this pool")
     
     # Verify transaction if provided
@@ -434,8 +532,16 @@ async def join_pool(data: PoolJoin):
     if transaction_verified and payment_amount > 0:
         escrow_funds[data.pool_id] += payment_amount
     
-    # Add wallet to pool participants
-    pool_participants[data.pool_id].append(data.wallet)
+    # Add wallet to pool participants with full record
+    now_ts = int(time.time())
+    pool_participants[data.pool_id].append({
+        "wallet": data.wallet,
+        "joined_at": now_ts,
+        "games_played": 0,
+        "best_score": 0,
+        "total_score": 0,
+        "last_active": now_ts
+    })
     pool_data[data.pool_id]["players"] += 1
     
     # Save data to file
@@ -447,6 +553,46 @@ async def join_pool(data: PoolJoin):
         "pool": pool_data[data.pool_id],
         "transaction_verified": transaction_verified,
         "escrow_balance": escrow_funds[data.pool_id]
+    }
+
+@app.post("/start-game")
+async def start_game(data: PoolJoin):
+    """Record that a player has started a game session"""
+    if data.pool_id not in pool_data:
+        raise HTTPException(status_code=404, detail="Pool not found")
+    if data.wallet not in get_pool_wallets(data.pool_id):
+        raise HTTPException(status_code=403, detail="Must join pool before playing")
+    
+    session_id = f"{data.wallet}_{data.pool_id}_{int(time.time() * 1000)}"
+    active_games[data.wallet] = {
+        "pool_id": data.pool_id,
+        "started_at": int(time.time()),
+        "session_id": session_id,
+        "status": "active"
+    }
+    save_data()
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "message": "Game session recorded on backend"
+    }
+
+@app.post("/abandon-game")
+async def abandon_game(data: PoolJoin):
+    """Record that a player abandoned a game session (frontend disconnect)"""
+    if data.wallet in active_games:
+        active_games[data.wallet]["status"] = "abandoned"
+        active_games[data.wallet]["ended_at"] = int(time.time())
+        save_data()
+        return {"status": "abandoned", "message": "Session marked as abandoned"}
+    return {"status": "no_active_session"}
+
+@app.get("/active-games", dependencies=[Depends(dev_wallet_auth)])
+def get_active_games():
+    """Admin endpoint: view all active game sessions"""
+    return {
+        "active_games": dict(active_games),
+        "count": len([g for g in active_games.values() if g.get("status") == "active"])
     }
 
 @app.post("/create-pool")
@@ -512,10 +658,10 @@ async def get_balance(address: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/reset-data")
+@app.post("/reset-data", dependencies=[Depends(dev_wallet_auth)])
 async def reset_data():
     """Reset all data - clear pools, scores, and transactions"""
-    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected
+    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, active_games, pool_history
     try:
         global_leaderboard = []
         pool_leaderboards = defaultdict(list)
@@ -524,6 +670,8 @@ async def reset_data():
         escrow_funds = defaultdict(float)
         pool_participants = defaultdict(list)
         dev_fees_collected = defaultdict(float)
+        active_games = {}
+        pool_history = []
         
         # Clear the data file
         if os.path.exists(DATA_FILE):
@@ -609,6 +757,20 @@ async def distribute_rewards(data: PayoutRequest):
         ])
         
         if contract_result["status"] == "success":
+            # Archive this pool cycle to history before clearing
+            pool_history.append({
+                "pool_id": data.pool_id,
+                "distributed_at": int(time.time()),
+                "total_prize": prize_amount,
+                "dev_fee": dev_fee,
+                "prize_after_fee": prize_after_fee,
+                "num_winners": len(payouts),
+                "payouts": payouts,
+                "participants": [p.get("wallet") if isinstance(p, dict) else p for p in pool_participants.get(data.pool_id, [])],
+                "leaderboard_at_distribution": leaderboard[:actual_winners_count] if actual_winners_count > 0 else [],
+                "contract_transaction": contract_result.get("transaction_id")
+            })
+            
             # Clear escrow after distribution (contract handles actual transfer)
             escrow_funds[data.pool_id] = 0
             dev_fees_collected[data.pool_id] = 0  # Contract handles dev fee transfer
@@ -643,14 +805,68 @@ def get_pool(pool_id: str):
     return {
         **pool_data[pool_id],
         "escrow_balance": escrow_funds[pool_id],
-        "participants": pool_participants[pool_id]
+        "participants": pool_participants[pool_id],
+        "participant_count": len(pool_participants[pool_id]),
+        "active_sessions": len([g for g in active_games.values() if g.get("pool_id") == pool_id and g.get("status") == "active"])
+    }
+
+@app.get("/pool/{pool_id}/participants", dependencies=[Depends(dev_wallet_auth)])
+def get_pool_participants_detail(pool_id: str):
+    """Get full participant records for a pool including stats"""
+    if pool_id not in pool_data:
+        raise HTTPException(status_code=404, detail="Pool not found")
+    return {
+        "pool_id": pool_id,
+        "participant_count": len(pool_participants.get(pool_id, [])),
+        "participants": pool_participants.get(pool_id, [])
+    }
+
+@app.get("/status", dependencies=[Depends(dev_wallet_auth)])
+def get_backend_status():
+    """Debug/status endpoint to verify data integrity"""
+    total_escrow = sum(escrow_funds.values())
+    total_dev = sum(dev_fees_collected.values())
+    return {
+        "status": "running",
+        "version": "2.0.5",
+        "timestamp": int(time.time()),
+        "pools": {
+            pool_id: {
+                "name": pool_data[pool_id]["name"],
+                "escrow_sui": escrow_funds.get(pool_id, 0),
+                "participants": len(pool_participants.get(pool_id, [])),
+                "active_games": len([g for g in active_games.values() if g.get("pool_id") == pool_id and g.get("status") == "active"]),
+                "start_time": pool_start_times.get(pool_id)
+            }
+            for pool_id in pool_data
+        },
+        "totals": {
+            "total_escrow_sui": total_escrow,
+            "total_dev_fees_sui": total_dev,
+            "total_participants": sum(len(pool_participants.get(pid, [])) for pid in pool_data),
+            "total_active_sessions": len([g for g in active_games.values() if g.get("status") == "active"]),
+            "completed_cycles": len(pool_history)
+        }
     }
 
 @app.get("/transactions/{pool_id}")
 def get_pool_transactions(pool_id: str):
     """Get all transactions for a specific pool"""
-    pool_transactions = [tx for tx in transactions if tx["pool_id"] == pool_id]
+    pool_transactions = [tx for tx in transactions if tx.get("pool_id") == pool_id]
     return {"transactions": pool_transactions}
+
+@app.get("/pool-history", dependencies=[Depends(dev_wallet_auth)])
+def get_pool_history():
+    """Get complete audit trail of all past pool cycles"""
+    return {
+        "history": pool_history,
+        "total_cycles": len(pool_history),
+        "by_pool": {
+            "daily": len([h for h in pool_history if h.get("pool_id") == "daily"]),
+            "weekly": len([h for h in pool_history if h.get("pool_id") == "weekly"]),
+            "monthly": len([h for h in pool_history if h.get("pool_id") == "monthly"])
+        }
+    }
 
 @app.get("/escrow/{pool_id}")
 def get_escrow_status(pool_id: str):
@@ -661,11 +877,12 @@ def get_escrow_status(pool_id: str):
         "pool_id": pool_id,
         "escrow_balance": escrow_funds[pool_id],
         "dev_fees_collected": dev_fees_collected[pool_id],
-        "total_transactions": len([tx for tx in transactions if tx["pool_id"] == pool_id]),
-        "participants": len(pool_participants[pool_id])
+        "total_transactions": len([tx for tx in transactions if tx.get("pool_id") == pool_id]),
+        "participants": len(pool_participants[pool_id]),
+        "active_sessions": len([g for g in active_games.values() if g.get("pool_id") == pool_id and g.get("status") == "active"])
     }
 
-@app.get("/dev-fees")
+@app.get("/dev-fees", dependencies=[Depends(dev_wallet_auth)])
 def get_dev_fees():
     """Get total dev fees collected across all pools"""
     total_fees = sum(dev_fees_collected.values())
@@ -680,7 +897,7 @@ def get_dev_fees():
         "fees_by_pool": fees_by_pool
     }
 
-@app.post("/withdraw-dev-fees")
+@app.post("/withdraw-dev-fees", dependencies=[Depends(dev_wallet_auth)])
 async def withdraw_dev_fees(pool_id: Optional[str] = None):
     """Withdraw dev fees to dev wallet address"""
     try:
