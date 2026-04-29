@@ -132,11 +132,16 @@ class GameScene extends Phaser.Scene {
       loop: true
     });
     
-    // Click to shoot
+    // Shoot while pointer is down
+    this.isFiring = false;
+    this.lastFired = 0;
+    
     this.input.on('pointerdown', (pointer) => {
-      if (this.gameActive) {
-        this.shoot(pointer.x, pointer.y);
-      }
+      this.isFiring = true;
+    });
+    
+    this.input.on('pointerup', () => {
+      this.isFiring = false;
     });
     
     // Collision detection
@@ -298,6 +303,21 @@ class GameScene extends Phaser.Scene {
   update() {
     if (!this.gameActive) return;
     
+    // Ship follows pointer horizontally
+    if (this.input.activePointer.isDown) {
+      const targetX = this.input.activePointer.x;
+      const distance = targetX - this.player.x;
+      // Smooth movement
+      this.player.x += distance * 0.15;
+      
+      // Auto-firing
+      const now = Date.now();
+      if (this.isFiring && now - this.lastFired > 250) {
+        this.shoot(this.input.activePointer.x, this.input.activePointer.y - 100);
+        this.lastFired = now;
+      }
+    }
+
     // Update difficulty based on score and time
     this.updateDifficulty();
     

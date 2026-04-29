@@ -277,8 +277,16 @@ def submit_score(data: ScoreData):
     if data.game_duration > config.MAX_GAME_DURATION:
         raise HTTPException(status_code=400, detail="Game duration too long")
     
+    if data.game_duration < 10 and data.score > 50:
+        raise HTTPException(status_code=400, detail="Suspiciously high score for short duration")
+    
     if abs(now - data.timestamp) > 10000:
         raise HTTPException(status_code=400, detail="Invalid timestamp")
+    
+    # Anti-cheat: Check if player actually joined the pool
+    if data.pool_id and data.pool_id != "global":
+        if data.wallet not in pool_participants.get(data.pool_id, []):
+            raise HTTPException(status_code=403, detail="Must join and pay for the pool before submitting a score")
     
     # Add to global leaderboard
     global_leaderboard.append({
