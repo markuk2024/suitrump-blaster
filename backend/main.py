@@ -259,10 +259,56 @@ async def call_smart_contract(function: str, args: list):
 def root():
     return {"status": "Sui Blaster Backend Running"}
 
+import asyncio
+
+# Add pool start times to track expiration
+pool_start_times = {
+    "daily": int(time.time()),
+    "weekly": int(time.time()),
+    "monthly": int(time.time())
+}
+
+async def auto_distribute_task():
+    """Background task to automatically distribute rewards when pools expire"""
+    while True:
+        try:
+            now = int(time.time())
+            
+            # Pool durations in seconds
+            durations = {
+                "daily": 24 * 3600,
+                "weekly": 7 * 24 * 3600,
+                "monthly": 28 * 24 * 3600
+            }
+            
+            for pool_id, duration in durations.items():
+                start_time = pool_start_times.get(pool_id, now)
+                if now - start_time >= duration:
+                    print(f"AUTOMATION: Pool {pool_id} has expired. Starting distribution...")
+                    
+                    # Call the distribution logic
+                    # We wrap this in a PayoutRequest object to reuse the existing logic
+                    await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
+                    
+                    # Reset pool for the next period
+                    pool_start_times[pool_id] = now
+                    pool_leaderboards[pool_id] = []
+                    pool_participants[pool_id] = []
+                    print(f"AUTOMATION: Pool {pool_id} reset for new period.")
+            
+            # Check every hour
+            await asyncio.sleep(3600)
+            
+        except Exception as e:
+            print(f"AUTOMATION ERROR: {e}")
+            await asyncio.sleep(60)
+
 @app.on_event("startup")
-def startup_event():
-    """Load data from file on startup"""
+async def startup_event():
+    """Load data from file and start automation on startup"""
     load_data()
+    # Start the background task
+    asyncio.create_task(auto_distribute_task())
 
 @app.post("/submit-score")
 def submit_score(data: ScoreData):

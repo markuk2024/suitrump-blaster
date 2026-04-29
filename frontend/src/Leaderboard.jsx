@@ -104,26 +104,6 @@ function Leaderboard({ onBack }) {
       <button className="back-btn" onClick={onBack}>← Back</button>
       <h2 className="section-title">🏆 Leaderboard</h2>
       
-      <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-        <button 
-          onClick={handlePayout}
-          style={{ 
-            backgroundColor: '#f39c12', 
-            color: 'white', 
-            padding: '10px 20px', 
-            borderRadius: '5px',
-            border: 'none',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            marginBottom: '10px'
-          }}
-        >
-          💰 Finalize Daily Pool & Payout
-        </button>
-        {payoutStatus && <p style={{ fontSize: '12px', color: payoutStatus.includes('✅') ? '#2ecc71' : '#e74c3c' }}>{payoutStatus}</p>}
-      </div>
-
       {loading ? (
         <div className="loading">Loading...</div>
       ) : leaderboard.length === 0 ? (
