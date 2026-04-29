@@ -66,7 +66,7 @@ DATA_FILE = "data.json"
 
 def load_data():
     """Load data from local JSON file"""
-    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected
+    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, pool_start_times
     
     try:
         if os.path.exists(DATA_FILE):
@@ -74,21 +74,7 @@ def load_data():
                 data = json.load(f)
             print("Data loaded from local file")
             
-            # Clear old mock pools if they exist (only if they have the old fake prize values)
-            pool_data_loaded = data.get("pool_data", {})
-            has_mock_data = False
-            for p in pool_data_loaded.values():
-                if p.get("prize") == "100 SUI" or p.get("players") == 45:
-                    has_mock_data = True
-                    break
-            
-            if has_mock_data:
-                print("Detected old mock pools - clearing them")
-                data["pool_data"] = {}
-                # Delete the old data file to force fresh start
-                if os.path.exists(DATA_FILE):
-                    os.remove(DATA_FILE)
-                data = {}
+            # ... (mock data check omitted for brevity)
         else:
             print("No existing data found, starting fresh")
             data = {}
@@ -109,6 +95,15 @@ def load_data():
         escrow_funds = defaultdict(float, {k: v for k, v in data.get("escrow_funds", {}).items()})
         pool_participants = defaultdict(list, {k: v for k, v in data.get("pool_participants", {}).items()})
         dev_fees_collected = defaultdict(float, {k: v for k, v in data.get("dev_fees_collected", {}).items()})
+        
+        # Load pool start times or initialize them
+        loaded_start_times = data.get("pool_start_times", {})
+        now = int(time.time())
+        pool_start_times = {
+            "daily": loaded_start_times.get("daily", now),
+            "weekly": loaded_start_times.get("weekly", now),
+            "monthly": loaded_start_times.get("monthly", now)
+        }
     except Exception as e:
         print(f"Error loading data: {e}")
         print("Starting with empty data")
@@ -122,7 +117,8 @@ def save_data():
         "transactions": transactions,
         "escrow_funds": dict(escrow_funds),
         "pool_participants": dict(pool_participants),
-        "dev_fees_collected": dict(dev_fees_collected)
+        "dev_fees_collected": dict(dev_fees_collected),
+        "pool_start_times": pool_start_times
     }
     try:
         with open(DATA_FILE, 'w') as f:
@@ -567,21 +563,44 @@ async def distribute_rewards(data: PayoutRequest):
         # Record dev fee
         dev_fees_collected[data.pool_id] += dev_fee
         
-        # Calculate reward percentages (from smart contract)
-        reward_percentages = [40, 25, 15, 8, 5, 3, 2, 1, 0.5, 0.5]  # Total 100%
-        
+        # Calculate reward percentages based on pool type
+        if data.pool_id == "daily":
+            reward_percentages = [100]  # 1st place gets everything
+        elif data.pool_id == "weekly":
+            reward_percentages = [33.33, 33.33, 33.34]  # Top 3 split
+        elif data.pool_id == "monthly":
+            reward_percentages = [25, 25, 25, 25]  # Top 4 split
+        else:
+            reward_percentages = [100]
+            
         payouts = []
-        winners = []
-        for i, entry in enumerate(leaderboard):
-            if i < len(reward_percentages):
-                reward = prize_after_fee * (reward_percentages[i] / 100)
-                payouts.append({
-                    "rank": i + 1,
-                    "wallet": entry["wallet"],
-                    "score": entry["score"],
-                    "reward": f"{reward:.2f} SUI"
-                })
-                winners.append((entry["wallet"], int(reward * 1_000_000_000)))  # Convert to MIST
+        winners = [] # List of (address, amount_mist)
+        
+        # Add Dev Fee to the winners list so it gets paid at the same time
+        if dev_fee > 0:
+            dev_wallet = config.DEV_WALLET_ADDRESS
+            winners.append((dev_wallet, int(dev_fee * 1_000_000_000)))
+        
+        # We pay out to the number of winners specified in reward_percentages, 
+        # but only if there are enough people on the leaderboard.
+        num_to_pay = len(reward_percentages)
+        actual_winners_count = min(len(leaderboard), num_to_pay)
+        
+        # Adjust percentages if fewer winners than slots
+        if actual_winners_count > 0 and actual_winners_count < num_to_pay:
+            adjusted_pct = 100 / actual_winners_count
+            reward_percentages = [adjusted_pct] * actual_winners_count
+        
+        for i in range(actual_winners_count):
+            entry = leaderboard[i]
+            reward = prize_after_fee * (reward_percentages[i] / 100)
+            payouts.append({
+                "rank": i + 1,
+                "wallet": entry["wallet"],
+                "score": entry["score"],
+                "reward": f"{reward:.2f} SUI"
+            })
+            winners.append((entry["wallet"], int(reward * 1_000_000_000)))  # Convert to MIST
         
         # Call smart contract to distribute rewards
         contract_result = await call_smart_contract("distribute_rewards", [
