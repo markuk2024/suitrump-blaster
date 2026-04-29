@@ -3,11 +3,8 @@
   max-width: 800px;
   margin: 0 auto;
   padding: 10px;
-  padding-bottom: 80px;
   color: #e2e8f0;
-  height: 100%;
-  overflow-y: auto; /* Force scrolling on the container itself */
-  -webkit-overflow-scrolling: touch;
+  /* Removed height and overflow to let parent scroll */
 }
 
 .whitepaper-content {
@@ -15,9 +12,10 @@
   border: 1px solid #334155;
   border-radius: 12px;
   padding: 30px;
+  margin-top: 10px;
+  margin-bottom: 50px; /* Space at the bottom */
   line-height: 1.6;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-  margin-top: 10px;
 }
 
 .whitepaper-content h1 {
