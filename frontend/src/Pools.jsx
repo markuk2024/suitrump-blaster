@@ -64,9 +64,16 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
     }
 
     try {
+      const poolObjectId = pool.contract_id;
+      
+      if (!poolObjectId || poolObjectId === "0x0") {
+        console.error('Pool missing contract_id:', pool);
+        alert('This pool has not been initialized on the blockchain yet. Please contact the administrator.');
+        return;
+      }
+
       const entryFee = pool.entry_fee || "0.1";
       const entryFeeMist = parseFloat(entryFee) * 1_000_000_000;
-      const poolObjectId = pool.contract_id || "0x0";  // Smart contract pool object ID
       let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
       apiUrl = apiUrl.replace(/\/$/, '');
       const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x0";
