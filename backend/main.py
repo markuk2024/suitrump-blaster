@@ -863,7 +863,7 @@ def get_backend_status():
     total_dev = sum(dev_fees_collected.values())
     return {
         "status": "running",
-        "version": "2.0.5",
+        "version": "2.0.6",
         "timestamp": int(time.time()),
         "pools": {
             pool_id: {
@@ -998,6 +998,7 @@ async def admin_force_payout(pool_id: str):
     return {
         "status": "force_payout_triggered",
         "pool_id": pool_id,
+        "pool_object_id": pool_object_id,
         "real_balance_queried": real_balance,
         "result": result,
         "message": "If on-chain transaction succeeded, funds have been distributed. Check Sui Explorer for the transaction digest."
