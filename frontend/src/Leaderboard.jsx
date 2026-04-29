@@ -13,11 +13,13 @@ function Leaderboard({ onBack }) {
 
   const fetchPools = async () => {
     try {
-      let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      apiUrl = apiUrl.trim().replace(/\/+$/, '');
+      let rawApiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      let apiUrl = rawApiUrl.trim().replace(/^["']|["']$/g, '');
       if (apiUrl && !apiUrl.startsWith('http')) {
+        apiUrl = apiUrl.replace(/^\/+/, '');
         apiUrl = `https://${apiUrl}`;
       }
+      apiUrl = apiUrl.replace(/\/+$/, '');
       const response = await fetch(`${apiUrl}/pools`);
       const data = await response.json();
       const poolsMap = {};
@@ -33,11 +35,13 @@ function Leaderboard({ onBack }) {
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      apiUrl = apiUrl.trim().replace(/\/+$/, '');
+      let rawApiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      let apiUrl = rawApiUrl.trim().replace(/^["']|["']$/g, '');
       if (apiUrl && !apiUrl.startsWith('http')) {
+        apiUrl = apiUrl.replace(/^\/+/, '');
         apiUrl = `https://${apiUrl}`;
       }
+      apiUrl = apiUrl.replace(/\/+$/, '');
       const response = await fetch(`${apiUrl}/leaderboard`);
       const data = await response.json();
       setLeaderboard(data.leaderboard || []);

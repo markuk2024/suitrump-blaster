@@ -16,32 +16,41 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
   const fetchPools = async () => {
     try {
       let rawApiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      console.log('Original VITE_API_URL from env:', rawApiUrl);
+      console.log('Original VITE_API_URL:', rawApiUrl);
       
-      // Clean the URL: trim and remove ANY trailing slashes
-      let apiUrl = rawApiUrl.trim().replace(/\/+$/, '');
+      // 1. Remove ANY leading/trailing whitespace or quotes
+      let apiUrl = rawApiUrl.trim().replace(/^["']|["']$/g, '');
       
-      // Force absolute URL if it seems relative or missing protocol
+      // 2. If it contains the current domain, it's definitely wrong
+      if (apiUrl.includes(window.location.origin)) {
+        apiUrl = apiUrl.replace(window.location.origin, '');
+      }
+
+      // 3. Ensure it starts with http
       if (apiUrl && !apiUrl.startsWith('http')) {
+        // If it starts with a slash, remove it
+        apiUrl = apiUrl.replace(/^\/+/, '');
         apiUrl = `https://${apiUrl}`;
       }
       
+      // 4. Final slash cleanup
+      apiUrl = apiUrl.replace(/\/+$/, '');
+      
       const finalUrl = `${apiUrl}/pools`;
-      console.log('Attempting to fetch pools from FINAL URL:', finalUrl);
+      console.log('FINAL FETCH URL:', finalUrl);
 
       const response = await fetch(finalUrl);
       
       if (!response.ok) {
         console.error(`Backend returned ${response.status} for ${finalUrl}`);
-        // If we get a 404, it might mean the backend is down or the path is wrong
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('Successfully fetched pools data:', data);
+      console.log('Successfully fetched pools:', data);
       setPools(data.pools || []);
     } catch (error) {
-      console.error('CRITICAL: Error fetching pools:', error);
+      console.error('FETCH ERROR:', error);
       setPools([]); 
     } finally {
       setLoading(false);
