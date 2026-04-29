@@ -126,7 +126,7 @@ class GameScene extends Phaser.Scene {
     
     // Start spawning enemies
     this.spawnEvent = this.time.addEvent({
-      delay: 1500,
+      delay: 1000, // Reduced from 1500
       callback: this.spawnEnemy,
       callbackScope: this,
       loop: true
@@ -221,24 +221,24 @@ class GameScene extends Phaser.Scene {
     
     const x = Phaser.Math.Between(50, 750);
     const enemy = this.enemies.create(x, -30, 'enemy');
-    const speed = Phaser.Math.Between(80, 150) * this.difficultyMultiplier;
+    const speed = Phaser.Math.Between(120, 200) * this.difficultyMultiplier; // Increased base speed
     enemy.setVelocityY(speed);
     enemy.setInteractive();
   }
 
   updateDifficulty() {
-    // Increase difficulty based on score (every 50 points)
-    const scoreBasedMultiplier = 1 + Math.floor(this.score / 50) * 0.1;
+    // Increase difficulty based on score (every 30 points instead of 50)
+    const scoreBasedMultiplier = 1 + Math.floor(this.score / 30) * 0.15;
     
-    // Increase difficulty based on time (every 30 seconds)
+    // Increase difficulty based on time (every 20 seconds instead of 30)
     const timeElapsed = (Date.now() - this.startTime) / 1000;
-    const timeBasedMultiplier = 1 + Math.floor(timeElapsed / 30) * 0.1;
+    const timeBasedMultiplier = 1 + Math.floor(timeElapsed / 20) * 0.15;
     
-    // Use the higher of the two multipliers, capped at 2.5x
-    this.difficultyMultiplier = Math.min(Math.max(scoreBasedMultiplier, timeBasedMultiplier), 2.5);
+    // Use the higher of the two multipliers, capped at 4.0x (increased from 2.5)
+    this.difficultyMultiplier = Math.min(Math.max(scoreBasedMultiplier, timeBasedMultiplier), 4.0);
     
     // Update spawn rate based on difficulty
-    const newSpawnDelay = Math.max(500, 1500 - (this.difficultyMultiplier - 1) * 400);
+    const newSpawnDelay = Math.max(300, 1000 - (this.difficultyMultiplier - 1) * 300);
     
     if (this.spawnEvent && this.spawnEvent.delay !== newSpawnDelay) {
       this.spawnEvent.remove();
