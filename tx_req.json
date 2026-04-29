@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTransactionBlock",
+  "params": [
+    "6oJKonSZtTpDm3CNWk5YcjaP7SMriHNi7ae9recZZemD",
+    {
+      "showEffects": true
+    }
+  ]
+}

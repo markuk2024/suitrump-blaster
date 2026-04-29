@@ -278,13 +278,16 @@ async def call_smart_contract(function: str, args: list):
                 txer = client.init_transaction()
                 
                 if function == "distribute_rewards":
-                    # args: [pool_object_id, winners_list]
+                    # args: [pool_object_id, [(winner_addr, amount_mist), ...]]
                     pool_id = args[0] if len(args) > 0 else "0x0"
                     winners = args[1] if len(args) > 1 else []
                     
-                    # Construct winners as SuiArray of addresses and amounts
-                    winner_addrs = SuiArray([SuiAddress(w[0]) for w in winners])
-                    winner_amounts = SuiArray([SuiU64(int(w[1])) for w in winners])
+                    # Separate into parallel vectors for new Move contract signature
+                    winner_addrs_list = [SuiAddress(w[0]) for w in winners]
+                    winner_amounts_list = [SuiU64(int(w[1])) for w in winners]
+                    
+                    winner_addrs = SuiArray(winner_addrs_list)
+                    winner_amounts = SuiArray(winner_amounts_list)
                     
                     txer.move_call(
                         target=f"{config.PACKAGE_ID}::pool::distribute_rewards",

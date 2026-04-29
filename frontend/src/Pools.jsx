@@ -82,17 +82,15 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
 
       const txb = new Transaction();
       
-      // 1. Split the fee from gas to pay
+      // 1. Split the entry fee from gas
       const [feeCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(entryFeeMist)]);
-      
-      // 2. Transfer the fee to the dev wallet
-      txb.transferObjects([feeCoin], txb.pure.address(devWallet));
 
-      // 3. Register the player in the pool contract
+      // 2. Register the player AND deposit fee into pool escrow
       txb.moveCall({
         target: `${packageId}::pool::join_pool`,
         arguments: [
           txb.object(poolObjectId),
+          feeCoin,
           txb.pure.address(walletAddress)
         ]
       });
