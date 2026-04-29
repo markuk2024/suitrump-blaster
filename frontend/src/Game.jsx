@@ -400,16 +400,44 @@ function Game({ pool, walletAddress, onGameOver, onBack }) {
     }
     isInitialized.current = true;
     
-    if (gameRef.current) {
-      gameRef.current.destroy(true);
-      gameRef.current = null;
-    }
+    // Initialize score callback
+    window.submitScoreCallback = async (score, duration) => {
+      console.log(`Submitting score: ${score}, duration: ${duration}`);
+      try {
+        const apiUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+        const response = await fetch(`${apiUrl}/submit-score`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            wallet: walletAddress,
+            score: score,
+            game_duration: duration,
+            timestamp: Date.now(),
+            pool_id: pool?.id || 'daily'
+          }),
+        });
+        const data = await response.json();
+        console.log('Score submission result:', data);
+        onGameOver(score);
+      } catch (error) {
+        console.error('Error submitting score:', error);
+        onGameOver(score);
+      }
+    };
+
+    const newGame = new Phaser.Game(config);
+    gameRef.current = newGame;
     
-    const container = document.getElementById('game-container');
-    if (!container) {
-      console.error('Game container not found');
+    return () => {
+      if (gameRef.current) {
+        gameRef.current.destroy(true);
+        gameRef.current = null;
+      }
       isInitialized.current = false;
-    }
+      window.submitScoreCallback = null;
+    };
   }, [walletAddress, pool?.id]);
   
   return (
