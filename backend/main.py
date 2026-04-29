@@ -322,8 +322,8 @@ def get_pools():
     pools_with_prize = []
     for pool in pool_data.values():
         pool_copy = pool.copy()
-        # Calculate current prize pool from escrow balance
-        current_prize = escrow_funds[pool["id"]]
+        # Calculate current prize pool from escrow balance (convert MIST to SUI)
+        current_prize = escrow_funds[pool["id"]] / 1_000_000_000
         pool_copy["current_prize"] = f"{current_prize:.2f} SUI"
         pool_copy["prize"] = f"{current_prize:.2f} SUI (Dynamic)"
         pools_with_prize.append(pool_copy)
