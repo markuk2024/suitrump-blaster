@@ -100,6 +100,11 @@ def load_data():
             "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.WEEKLY_POOL_ID},
             "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.MONTHLY_POOL_ID}
         })
+        # Always ensure latest contract IDs from config are applied to pools
+        if "daily" in pool_data: pool_data["daily"]["contract_id"] = config.DAILY_POOL_ID
+        if "weekly" in pool_data: pool_data["weekly"]["contract_id"] = config.WEEKLY_POOL_ID
+        if "monthly" in pool_data: pool_data["monthly"]["contract_id"] = config.MONTHLY_POOL_ID
+        
         transactions = data.get("transactions", [])
         escrow_funds = defaultdict(float, {k: v for k, v in data.get("escrow_funds", {}).items()})
         pool_participants = defaultdict(list, {k: v for k, v in data.get("pool_participants", {}).items()})
