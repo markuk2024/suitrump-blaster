@@ -10,47 +10,9 @@ function App() {
   const currentAccount = useCurrentAccount();
   const wallets = useWallets();
   const { mutate: connectWallet } = useConnectWallet();
-  const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
   const [currentView, setCurrentView] = useState('home');
   const [selectedPool, setSelectedPool] = useState(null);
   const [connecting, setConnecting] = useState(false);
-  const [adminMsg, setAdminMsg] = useState('');
-
-  const handleInitializePools = async () => {
-    try {
-      setAdminMsg('Initializing pools... check wallet');
-      const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x529e9c233a7f2f6cc5bcd8371735cba8e44d80a1d30c8bd0a29ea4b4be4d4b54";
-      const devWallet = "0x4c2891f70f1317fed1198140e0f06f49593c82558b2b467e1717c23fee9131a6";
-      
-      const poolsToCreate = [
-        { name: "Daily Pool", fee: "100000000" },
-        { name: "Weekly Pool", fee: "500000000" },
-        { name: "Monthly Pool", fee: "1000000000" }
-      ];
-
-      for (const pool of poolsToCreate) {
-        const txb = new Transaction();
-        txb.moveCall({
-          target: `${packageId}::pool::create_pool`,
-          arguments: [
-            txb.pure.string(pool.name),
-            txb.pure.u64(pool.fee),
-            txb.pure.u8(2),
-            txb.pure.address(devWallet)
-          ]
-        });
-        
-        const result = await signAndExecuteTransaction({ transaction: txb });
-        console.log(`Created ${pool.name}. Result:`, result);
-        setAdminMsg(prev => prev + `\n✅ ${pool.name} created! Check console for ID.`);
-      }
-      
-      alert('Pools created! Open browser console (F12) to get the Object IDs.');
-    } catch (error) {
-      console.error('Admin Error:', error);
-      setAdminMsg('Error: ' + error.message);
-    }
-  };
 
   const handleConnectWallet = () => {
     console.log('Available wallets:', wallets);
@@ -134,19 +96,6 @@ function App() {
                 <li>Top players win prize pool rewards</li>
               </ul>
             </div>
-
-            {currentAccount && (
-              <div style={{ marginTop: '40px', borderTop: '1px solid #333', paddingTop: '20px' }}>
-                <p style={{ fontSize: '12px', color: '#666' }}>Admin Tool:</p>
-                <button 
-                  onClick={handleInitializePools}
-                  style={{ backgroundColor: '#333', color: '#fff', fontSize: '12px', padding: '5px 10px', borderRadius: '4px' }}
-                >
-                  ⚙️ Initialize Production Pools
-                </button>
-                {adminMsg && <pre style={{ fontSize: '10px', color: '#888', marginTop: '10px' }}>{adminMsg}</pre>}
-              </div>
-            )}
           </div>
         )}
 
