@@ -1,7 +1,7 @@
 module blaster::pool {
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, UID};
+    use sui::tx_context::TxContext;
+    use sui::object::UID;
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
@@ -17,7 +17,6 @@ module blaster::pool {
     public struct EscrowKey has copy, drop, store {}
 
     /// Pool structure that holds pool metadata
-    /// NOTE: balance field is deprecated; actual SUI escrow stored in dynamic field
     public struct Pool has key {
         id: UID,
         name: vector<u8>,
@@ -56,44 +55,60 @@ module blaster::pool {
         transfer::share_object(pool);
     }
 
-    /// Deposit SUI into the pool escrow and register player
+    /// Original join_pool - adds player to list (kept for upgrade compatibility)
     public entry fun join_pool(
         pool: &mut Pool,
-        payment: Coin<SUI>,
-        player: address,
-        ctx: &mut TxContext
+        player: address
     ) {
         assert!(pool.is_active, EPoolNotActive);
         
-        // Add player to list if not already present
         if (!vector::contains(&pool.players, &player)) {
             vector::push_back(&mut pool.players, player);
         }
+    }
+
+    /// NEW: Deposit SUI into pool escrow (call this before join_pool in same tx)
+    public entry fun deposit(
+        pool: &mut Pool,
+        payment: Coin<SUI>,
+        ctx: &mut TxContext
+    ) {
+        assert!(pool.is_active, EPoolNotActive);
         
         // Ensure escrow dynamic field exists (backward compat for old pools)
         if (!dynamic_field::exists_with_type<EscrowKey, Balance<SUI>>(&pool.id, EscrowKey {})) {
             dynamic_field::add(&mut pool.id, EscrowKey {}, balance::zero<SUI>());
         };
         
-        // Deposit payment into escrow (dynamic field)
         let escrow: &mut Balance<SUI> = dynamic_field::borrow_mut(&mut pool.id, EscrowKey {});
         let payment_balance = coin::into_balance(payment);
         let payment_value = balance::value(&payment_balance);
         balance::join(escrow, payment_balance);
         
-        // Also update deprecated balance field for compatibility
+        // Update legacy balance field for compatibility
         pool.balance = pool.balance + payment_value;
     }
 
-    /// Distribute rewards to winners
-    /// winners and amounts are parallel vectors
+    /// NEW: Deposit + Join in one call (convenience function)
+    public entry fun deposit_and_join(
+        pool: &mut Pool,
+        payment: Coin<SUI>,
+        player: address,
+        ctx: &mut TxContext
+    ) {
+        deposit(pool, payment, ctx);
+        join_pool(pool, player);
+    }
+
+    /// NEW: Distribute rewards from escrow to winners
+    /// winners and amounts are parallel vectors (both in MIST)
     public entry fun distribute_rewards(
         pool: &mut Pool,
         winners: vector<address>,
         amounts: vector<u64>,
         ctx: &mut TxContext
     ) {
-        assert!(!pool.is_active || vector::length(&winners) > 0, ENoFunds);
+        assert!(vector::length(&winners) > 0, ENoFunds);
         
         // Initialize escrow if missing (backward compat)
         if (!dynamic_field::exists_with_type<EscrowKey, Balance<SUI>>(&pool.id, EscrowKey {})) {
@@ -130,12 +145,12 @@ module blaster::pool {
         pool.is_active = false;
     }
 
-    /// Get pool information (balance field is deprecated; use get_escrow_balance for real SUI)
+    /// Get pool information (unchanged signature for upgrade compat)
     public fun get_pool_info(pool: &Pool): (vector<u8>, u64, u64, u8, address, bool, u64) {
         (
             pool.name,
             pool.entry_fee,
-            pool.balance,  // Deprecated - kept for backward compat
+            pool.balance,
             pool.dev_fee_percentage,
             pool.dev_wallet,
             pool.is_active,
@@ -143,7 +158,12 @@ module blaster::pool {
         )
     }
 
-    /// Get actual escrow balance in MIST
+    /// Original get_balance (kept for upgrade compat)
+    public fun get_balance(pool: &Pool): u64 {
+        pool.balance
+    }
+
+    /// NEW: Get actual on-chain escrow balance in MIST
     public fun get_escrow_balance(pool: &Pool): u64 {
         if (dynamic_field::exists_with_type<EscrowKey, Balance<SUI>>(&pool.id, EscrowKey {})) {
             let escrow: &Balance<SUI> = dynamic_field::borrow(&pool.id, EscrowKey {});
@@ -158,7 +178,7 @@ module blaster::pool {
         pool.players
     }
 
-    /// Admin function: return all escrow funds to dev wallet
+    /// NEW: Admin refund all escrow to dev wallet
     public entry fun refund_all(pool: &mut Pool, ctx: &mut TxContext) {
         if (dynamic_field::exists_with_type<EscrowKey, Balance<SUI>>(&pool.id, EscrowKey {})) {
             let escrow: &mut Balance<SUI> = dynamic_field::borrow_mut(&mut pool.id, EscrowKey {});

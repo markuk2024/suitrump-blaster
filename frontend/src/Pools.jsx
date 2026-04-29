@@ -85,9 +85,9 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       // 1. Split the entry fee from gas
       const [feeCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(entryFeeMist)]);
 
-      // 2. Register the player AND deposit fee into pool escrow
+      // 2. Deposit fee into pool escrow AND register player in one call
       txb.moveCall({
-        target: `${packageId}::pool::join_pool`,
+        target: `${packageId}::pool::deposit_and_join`,
         arguments: [
           txb.object(poolObjectId),
           feeCoin,
