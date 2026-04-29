@@ -121,9 +121,9 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
         },
         body: JSON.stringify({
           pool_id: pool.id,
-          wallet_address: walletAddress,
+          wallet: walletAddress,
           transaction_id: result.digest,
-          amount: entryFeeMist,
+          amount: String(entryFeeMist),
         }),
       });
 
