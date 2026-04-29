@@ -65,10 +65,11 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
 
     try {
       const poolObjectId = pool.contract_id;
+      console.log(`Checking pool initialization for ${pool.name}:`, poolObjectId);
       
-      if (!poolObjectId || poolObjectId === "0x0") {
-        console.error('Pool missing contract_id:', pool);
-        alert('This pool has not been initialized on the blockchain yet. Please contact the administrator.');
+      if (!poolObjectId || poolObjectId === "0x0" || poolObjectId === "undefined") {
+        console.error('Pool missing or invalid contract_id:', pool);
+        alert(`This pool (${pool.name}) has not been initialized on the blockchain yet (ID: ${poolObjectId}). Please check your Render environment variables.`);
         return;
       }
 
