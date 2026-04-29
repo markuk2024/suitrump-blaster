@@ -4,6 +4,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import Game from './Game';
 import Leaderboard from './Leaderboard';
 import Pools from './Pools';
+import Whitepaper from './Whitepaper';
 import './App.css';
 
 function App() {
@@ -85,6 +86,13 @@ function App() {
               >
                 🏆 Leaderboard
               </button>
+              <button 
+                className="action-btn info"
+                onClick={() => setCurrentView('whitepaper')}
+                style={{ gridColumn: 'span 2', marginTop: '10px' }}
+              >
+                📄 Read Whitepaper
+              </button>
             </div>
 
             <div className="info-section">
@@ -123,6 +131,10 @@ function App() {
 
         {currentView === 'leaderboard' && (
           <Leaderboard onBack={() => setCurrentView('home')} />
+        )}
+
+        {currentView === 'whitepaper' && (
+          <Whitepaper onBack={() => setCurrentView('home')} />
         )}
       </div>
     </div>
