@@ -70,13 +70,21 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
       apiUrl = apiUrl.replace(/\/$/, '');
       const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x0";
+      const devWallet = import.meta.env.VITE_DEV_WALLET || "0x4c2891f70f1317fed1198140e0f06f49593c82558b2b467e1717c23fee9131a6";
 
       const txb = new Transaction();
+      
+      // 1. Split the fee from gas to pay
+      const [feeCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(entryFeeMist)]);
+      
+      // 2. Transfer the fee to the dev wallet
+      txb.transferObjects([feeCoin], txb.pure.address(devWallet));
+
+      // 3. Register the player in the pool contract
       txb.moveCall({
         target: `${packageId}::pool::join_pool`,
         arguments: [
           txb.object(poolObjectId),
-          txb.pure.u64(entryFeeMist),
           txb.pure.address(walletAddress)
         ]
       });
