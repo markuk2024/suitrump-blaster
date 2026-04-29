@@ -328,14 +328,26 @@ def get_leaderboard(pool_id: Optional[str] = None):
 @app.get("/pools")
 def get_pools():
     pools_with_prize = []
+    print(f"DEBUG: Current escrow funds state: {dict(escrow_funds)}")
     for pool in pool_data.values():
         pool_copy = pool.copy()
         # Calculate current prize pool from escrow balance (convert MIST to SUI)
-        current_prize = escrow_funds[pool["id"]] / 1_000_000_000
+        raw_mist = escrow_funds.get(pool["id"], 0)
+        current_prize = raw_mist / 1_000_000_000
+        
+        # Safety: If the prize looks impossible (e.g. 100M SUI), something is wrong with the data
+        if current_prize > 1_000_000:
+            print(f"WARNING: Insane prize detected for {pool['id']}: {current_prize}")
+            current_prize = 0.0
+            
         pool_copy["current_prize"] = f"{current_prize:.2f} SUI"
         pool_copy["prize"] = f"{current_prize:.2f} SUI (Dynamic)"
         pools_with_prize.append(pool_copy)
-    return {"pools": pools_with_prize}
+    return {
+        "pools": pools_with_prize,
+        "version": "2.0.4",
+        "timestamp": int(time.time())
+    }
 
 @app.post("/join-pool")
 async def join_pool(data: PoolJoin):
