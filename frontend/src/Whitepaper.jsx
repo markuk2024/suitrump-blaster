@@ -77,6 +77,15 @@ function Whitepaper({ onBack }) {
           </ul>
         </section>
 
+        <section>
+          <h2>6. Disclaimer & Risks</h2>
+          <p>
+            Sui Blaster v2 is a decentralized application built on the Sui Network. 
+            Cryptocurrency investments carry inherent risks. Please only play with SUI you can afford to lose. 
+            The developers are not responsible for network congestion or wallet-side technical issues.
+          </p>
+        </section>
+
         <footer>
           <p>&copy; 2024 Sui Blaster v2. Built on Sui Mainnet.</p>
         </footer>

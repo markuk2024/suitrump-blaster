@@ -4,7 +4,8 @@
   margin: 0 auto;
   padding: 10px;
   color: #e2e8f0;
-  /* Removed height and overflow to let parent scroll */
+  overflow-y: visible; /* Ensure content can grow */
+  display: block; /* Standard block layout */
 }
 
 .whitepaper-content {
@@ -13,7 +14,7 @@
   border-radius: 12px;
   padding: 30px;
   margin-top: 10px;
-  margin-bottom: 50px; /* Space at the bottom */
+  margin-bottom: 100px; /* Force extra space at bottom for scrolling */
   line-height: 1.6;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
 }
