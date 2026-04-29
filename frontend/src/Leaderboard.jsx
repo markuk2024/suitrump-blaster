@@ -5,6 +5,7 @@ function Leaderboard({ onBack }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pools, setPools] = useState({});
+  const [payoutStatus, setPayoutStatus] = useState(null);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -58,11 +59,71 @@ function Leaderboard({ onBack }) {
     }
   };
 
+  const handlePayout = async () => {
+    if (!window.confirm('This will end the current Daily Pool and distribute rewards to the top players. Continue?')) {
+      return;
+    }
+
+    try {
+      setPayoutStatus('Processing payouts...');
+      let rawApiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      let apiUrl = rawApiUrl.trim().replace(/^["']|["']$/g, '');
+      if (apiUrl && !apiUrl.startsWith('http')) {
+        apiUrl = apiUrl.replace(/^\/+/, '');
+        apiUrl = `https://${apiUrl}`;
+      }
+      apiUrl = apiUrl.replace(/\/+$/, '');
+      
+      const response = await fetch(`${apiUrl}/distribute-rewards`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pool_id: 'daily',
+          num_winners: 10
+        }),
+      });
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        setPayoutStatus(`✅ Success! Prize pool of ${data.total_prize} distributed. TX: ${data.contract_transaction}`);
+        alert(`Rewards Distributed!\nTotal Prize: ${data.total_prize}\nWinners: ${data.num_winners}`);
+        fetchLeaderboard(); // Refresh
+      } else {
+        setPayoutStatus(`❌ Error: ${data.message || data.error}`);
+      }
+    } catch (error) {
+      setPayoutStatus('❌ Error calling payout API');
+      console.error(error);
+    }
+  };
+
   return (
     <div className="leaderboard-wrapper">
       <button className="back-btn" onClick={onBack}>← Back</button>
       <h2 className="section-title">🏆 Leaderboard</h2>
       
+      <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+        <button 
+          onClick={handlePayout}
+          style={{ 
+            backgroundColor: '#f39c12', 
+            color: 'white', 
+            padding: '10px 20px', 
+            borderRadius: '5px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            marginBottom: '10px'
+          }}
+        >
+          💰 Finalize Daily Pool & Payout
+        </button>
+        {payoutStatus && <p style={{ fontSize: '12px', color: payoutStatus.includes('✅') ? '#2ecc71' : '#e74c3c' }}>{payoutStatus}</p>}
+      </div>
+
       {loading ? (
         <div className="loading">Loading...</div>
       ) : leaderboard.length === 0 ? (
