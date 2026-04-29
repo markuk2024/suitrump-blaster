@@ -259,39 +259,74 @@ async def verify_sui_transaction(transaction_id: str):
         }
 
 async def call_smart_contract(function: str, args: list):
-    """Call a smart contract function on Sui"""
+    """Call a smart contract function on Sui - attempts real transaction if pysui + admin key available"""
     try:
         admin_key = config.ADMIN_PRIVATE_KEY.strip() if config.ADMIN_PRIVATE_KEY else ""
         
-        if HAS_PYSUI and admin_key:
-            print(f"Executing REAL smart contract call: {function}")
+        if HAS_PYSUI and admin_key and config.PACKAGE_ID and config.PACKAGE_ID != "0x0":
+            print(f"Attempting REAL on-chain transaction: {function}")
             try:
-                # Standard Sui Bech32 private keys are ~73-75 characters
-                if admin_key.startswith("suiprivkey"):
-                    print(f"Sui Bech32 Private Key detected (Length: {len(admin_key)}) for {function}")
-                    # Validate length if necessary, though pysui handles the parsing
-                    if len(admin_key) < 60:
-                        print("Warning: Private key seems too short for a standard Bech32 key")
+                # Initialize Sui client with admin key
+                cfg = SuiConfig.user_config(
+                    keystore_file=None,
+                    rpc_url=config.SUI_NETWORK,
+                    private_key=admin_key
+                )
+                client = SyncClient(cfg)
                 
+                # Build and execute transaction
+                txer = client.init_transaction()
+                
+                if function == "distribute_rewards":
+                    # args: [pool_object_id, winners_list]
+                    pool_id = args[0] if len(args) > 0 else "0x0"
+                    winners = args[1] if len(args) > 1 else []
+                    
+                    # Construct winners as SuiArray of addresses and amounts
+                    winner_addrs = SuiArray([SuiAddress(w[0]) for w in winners])
+                    winner_amounts = SuiArray([SuiU64(int(w[1])) for w in winners])
+                    
+                    txer.move_call(
+                        target=f"{config.PACKAGE_ID}::pool::distribute_rewards",
+                        arguments=[SuiAddress(pool_id), winner_addrs, winner_amounts]
+                    )
+                else:
+                    # Generic fallback - just simulate for unsupported functions
+                    print(f"Function {function} not implemented for real signing, using simulation")
+                    return {
+                        "status": "simulated",
+                        "function": function,
+                        "transaction_id": f"sim_{int(time.time())}"
+                    }
+                
+                result = handle_result(client.execute_transaction(txer))
+                tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                
+                print(f"Transaction succeeded: {tx_digest}")
                 return {
                     "status": "success",
                     "function": function,
-                    "transaction_id": f"sui_tx_{int(time.time())}",
-                    "message": f"Transaction prepared for signing with Admin Key (Type: Bech32, Len: {len(admin_key)})"
+                    "transaction_id": tx_digest,
+                    "message": "Transaction executed on-chain"
                 }
             except Exception as e:
-                print(f"Error with Admin Key processing: {e}")
+                print(f"Real transaction failed: {e}")
+                # Fall through to simulation
         
         # Fallback to simulation
         if not admin_key:
-            print(f"ADMIN_PRIVATE_KEY not found in environment - using simulation for {function}")
-        
-        print(f"Simulating smart contract function: {function} with args: {args}")
+            print(f"ADMIN_PRIVATE_KEY not found - simulating {function}")
+        elif not HAS_PYSUI:
+            print(f"pysui not installed - simulating {function}")
+        elif not config.PACKAGE_ID or config.PACKAGE_ID == "0x0":
+            print(f"PACKAGE_ID not set - simulating {function}")
+        else:
+            print(f"Falling back to simulation for {function}")
         
         return {
-            "status": "success",
+            "status": "simulated",
             "function": function,
-            "transaction_id": f"contract_call_{int(time.time())}"
+            "transaction_id": f"sim_{int(time.time())}"
         }
     except Exception as e:
         print(f"Error calling smart contract: {e}")
@@ -895,6 +930,50 @@ def get_dev_fees():
         "dev_fee_percentage": f"{config.DEV_FEE_PERCENTAGE}%",
         "dev_wallet_address": config.DEV_WALLET_ADDRESS,
         "fees_by_pool": fees_by_pool
+    }
+
+@app.post("/admin/force-payout", dependencies=[Depends(dev_wallet_auth)])
+async def admin_force_payout(pool_id: str):
+    """Force immediate payout for a pool - adds dev wallet as winner if no scores exist, then triggers on-chain distribution"""
+    if pool_id not in pool_data:
+        raise HTTPException(status_code=404, detail="Pool not found")
+    
+    dev_wallet = config.DEV_WALLET_ADDRESS
+    
+    # If leaderboard is empty (data was lost), add dev wallet as sole winner
+    if not pool_leaderboards.get(pool_id):
+        print(f"FORCE PAYOUT: No scores found for {pool_id}, adding dev wallet as winner")
+        pool_leaderboards[pool_id].append({
+            "wallet": dev_wallet,
+            "score": 999999,
+            "timestamp": int(time.time() * 1000),
+            "game_duration": 60,
+            "forced": True
+        })
+        save_data()
+    
+    # Ensure dev wallet is in participants list
+    if dev_wallet not in get_pool_wallets(pool_id):
+        pool_participants[pool_id].append({
+            "wallet": dev_wallet,
+            "joined_at": int(time.time()),
+            "games_played": 1,
+            "best_score": 999999,
+            "total_score": 999999,
+            "last_active": int(time.time()),
+            "forced": True
+        })
+        pool_data[pool_id]["players"] += 1
+        save_data()
+    
+    # Trigger distribution
+    result = await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
+    
+    return {
+        "status": "force_payout_triggered",
+        "pool_id": pool_id,
+        "result": result,
+        "message": "If on-chain transaction succeeded, funds have been distributed. Check Sui Explorer for the transaction digest."
     }
 
 @app.post("/withdraw-dev-fees", dependencies=[Depends(dev_wallet_auth)])
