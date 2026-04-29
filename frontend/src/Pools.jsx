@@ -130,10 +130,10 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       const data = await response.json();
       console.log('Join pool response:', data);
 
-      if (data.status === 'success') {
+      if (data.status === 'success' || data.detail === 'Already joined this pool') {
         onSelectPool(pool);
       } else {
-        alert('Failed to join pool: ' + data.message);
+        alert('Failed to join pool: ' + (data.message || data.detail || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error joining pool:', error);
