@@ -2,20 +2,22 @@
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
-  padding-bottom: 100px; /* Extra space at the bottom */
+  padding: 10px;
+  padding-bottom: 80px;
   color: #e2e8f0;
-  display: flex;
-  flex-direction: column;
+  height: 100%;
+  overflow-y: auto; /* Force scrolling on the container itself */
+  -webkit-overflow-scrolling: touch;
 }
 
 .whitepaper-content {
   background: rgba(15, 23, 42, 0.95);
-  border: 1px solid #1e293b;
+  border: 1px solid #334155;
   border-radius: 12px;
-  padding: 40px;
+  padding: 30px;
   line-height: 1.6;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  margin-top: 10px;
 }
 
 .whitepaper-content h1 {
