@@ -1,7 +1,8 @@
+#[allow(duplicate_alias)]
 module blaster::pool {
     use sui::transfer;
     use sui::tx_context::TxContext;
-    use sui::object::UID;
+    use sui::object;
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
@@ -38,7 +39,7 @@ module blaster::pool {
     ) {
         assert!(dev_fee_percentage <= 100, EInvalidFee);
         
-        let pool = Pool {
+        let mut pool = Pool {
             id: object::new(ctx),
             name,
             entry_fee,
@@ -71,7 +72,7 @@ module blaster::pool {
     public entry fun deposit(
         pool: &mut Pool,
         payment: Coin<SUI>,
-        ctx: &mut TxContext
+        _ctx: &mut TxContext
     ) {
         assert!(pool.is_active, EPoolNotActive);
         
@@ -124,7 +125,7 @@ module blaster::pool {
         let num_amounts = vector::length(&amounts);
         assert!(num_winners == num_amounts, EInvalidFee);
         
-        let i = 0;
+        let mut i = 0;
         while (i < num_winners) {
             let winner = *vector::borrow(&winners, i);
             let amount = *vector::borrow(&amounts, i);
