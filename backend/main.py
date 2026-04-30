@@ -69,7 +69,28 @@ class PayoutRequest(BaseModel):
     num_winners: int = 10  # Number of top players to pay out
 
 # Data persistence
-DATA_FILE = "data.json"
+DATA_FILE = os.getenv("DATA_FILE", os.path.join(os.getcwd(), "data.json"))
+
+
+def _ensure_data_dir():
+    data_dir = os.path.dirname(DATA_FILE)
+    if data_dir:
+        os.makedirs(data_dir, exist_ok=True)
+
+
+def _parse_entry_fee_to_mist(entry_fee: str) -> int:
+    if not entry_fee:
+        return config.POOL_ENTRY_FEE
+    cleaned = "".join(ch for ch in entry_fee if ch.isdigit() or ch == ".")
+    try:
+        value = float(cleaned)
+    except ValueError:
+        return config.POOL_ENTRY_FEE
+    return int(value * 1_000_000_000)
+
+
+def _normalize_address(value: Optional[str]) -> Optional[str]:
+    return value.lower() if isinstance(value, str) else value
 
 def _migrate_participants(participants):
     """Migrate old string-only participant lists to rich dict records"""
@@ -105,6 +126,7 @@ def load_data():
     global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, pool_start_times, active_games, pool_history
     
     try:
+        _ensure_data_dir()
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r') as f:
                 data = json.load(f)
@@ -164,6 +186,7 @@ def save_data():
         "pool_history": list(pool_history)
     }
     try:
+        _ensure_data_dir()
         with open(DATA_FILE, 'w') as f:
             json.dump(data, f, indent=2)
         print("Data saved to local file")
@@ -219,44 +242,90 @@ async def get_sui_balance(address: str):
         print(f"Error getting balance: {e}")
         return 0
 
-async def verify_sui_transaction(transaction_id: str):
+async def verify_sui_transaction(transaction_id: str, pool_id: str, expected_entry_fee: int):
     """Verify a Sui transaction and extract payment details"""
     try:
-        result = await call_sui_rpc("suix_getTransaction", [transaction_id])
-        print(f"Transaction verification result: {result}")
-        
-        if "result" not in result:
-            print("No result in transaction response - accepting transaction anyway")
-            return {
-                "transaction_id": transaction_id,
-                "status": "success",
-                "timestamp": int(time.time() * 1000)
+        params = [
+            transaction_id,
+            {
+                "showInput": True,
+                "showEffects": True,
+                "showEvents": False,
+                "showObjectChanges": False,
+                "showBalanceChanges": True
             }
-        
-        tx = result["result"]
-        
-        # Check if transaction was successful
-        # The status might be in different locations depending on the RPC response
-        status = tx.get("status")
-        if isinstance(status, dict):
-            status = status.get("status")
-        
-        # Accept transaction regardless of status for now
-        # In production, verify the actual status and amount
-        print(f"Transaction status: {status} - accepting anyway for development")
-        
+        ]
+        result = await call_sui_rpc("sui_getTransactionBlock", params)
+        print(f"Transaction verification result: {result}")
+
+        tx_result = result.get("result")
+        if not tx_result:
+            print("No result in transaction response - rejecting")
+            return None
+
+        effects = tx_result.get("effects", {})
+        status = effects.get("status", {}).get("status")
+        if status != "success":
+            print(f"Transaction status not success: {status}")
+            return None
+
+        tx_data = tx_result.get("transaction", {}).get("data", {})
+        programmable = tx_data.get("transaction", {})
+        inputs = programmable.get("inputs", [])
+        transactions = programmable.get("transactions", [])
+
+        # Validate move call target
+        move_calls = [t.get("MoveCall") for t in transactions if "MoveCall" in t]
+        target_ok = any(
+            mc and
+            mc.get("package") == config.PACKAGE_ID and
+            mc.get("module") == "pool" and
+            mc.get("function") in ("deposit", "deposit_and_join")
+            for mc in move_calls
+        )
+        if not target_ok:
+            print("Transaction did not call expected move target")
+            return None
+
+        # Find amount from inputs (first pure u64) or balanceChanges
+        amount_mist = None
+        for inp in inputs:
+            if inp.get("type") == "pure" and inp.get("valueType") == "u64":
+                try:
+                    amount_mist = int(inp.get("value"))
+                    break
+                except (TypeError, ValueError):
+                    continue
+
+        if amount_mist is None:
+            for change in tx_result.get("balanceChanges", []):
+                owner = change.get("owner", {})
+                if owner.get("AddressOwner") == tx_data.get("sender") and change.get("coinType") == "0x2::sui::SUI":
+                    try:
+                        amt = int(change.get("amount", 0))
+                        if amt < 0:
+                            amount_mist = abs(amt)
+                            break
+                    except ValueError:
+                        continue
+
+        if amount_mist is None:
+            print("Could not determine entry fee amount")
+            return None
+
+        if abs(amount_mist - expected_entry_fee) > 1000:
+            print(f"Entry fee mismatch: expected {expected_entry_fee}, got {amount_mist}")
+            return None
+
         return {
             "transaction_id": transaction_id,
             "status": "success",
-            "timestamp": int(time.time() * 1000)
+            "timestamp": int(time.time() * 1000),
+            "amount_mist": amount_mist
         }
     except Exception as e:
-        print(f"Error verifying transaction: {e} - accepting anyway for development")
-        return {
-            "transaction_id": transaction_id,
-            "status": "success",
-            "timestamp": int(time.time() * 1000)
-        }
+        print(f"Error verifying transaction: {e}")
+        return None
 
 async def call_smart_contract(function: str, args: list):
     """Call a smart contract function on Sui - attempts real transaction if pysui + admin key available"""
@@ -538,45 +607,51 @@ def get_pools():
 async def join_pool(data: PoolJoin):
     if data.pool_id not in pool_data:
         raise HTTPException(status_code=404, detail="Pool not found")
+
     
     # Check if wallet is already in this pool
     if data.wallet in get_pool_wallets(data.pool_id):
         raise HTTPException(status_code=400, detail="Already joined this pool")
     
+    # Determine expected entry fee in MIST
+    pool_entry_fee = pool_data[data.pool_id].get("entry_fee", str(config.POOL_ENTRY_FEE / 1_000_000_000))
+    expected_entry_fee = _parse_entry_fee_to_mist(pool_entry_fee)
+
     # Verify transaction if provided
     transaction_verified = False
-    payment_amount = 0
+    payment_amount_mist = 0
     
     if data.transaction_id:
         # Verify the Sui transaction
-        tx_verification = await verify_sui_transaction(data.transaction_id)
+        tx_verification = await verify_sui_transaction(data.transaction_id, data.pool_id, expected_entry_fee)
         if tx_verification:
             transaction_verified = True
-            # Parse payment amount from data or transaction
-            payment_amount = float(data.amount) if data.amount else 0
+            payment_amount_mist = tx_verification.get("amount_mist", 0)
         else:
             raise HTTPException(status_code=400, detail="Invalid transaction")
     else:
-        # For development, allow joining without transaction
-        # In production, require transaction verification
-        pass
-    
+        # For development, allow joining without transaction but do not credit escrow
+        print("WARNING: join_pool called without transaction_id - escrow not updated")
+
     # Record the transaction
     if data.transaction_id:
+        payment_amount_sui = payment_amount_mist / 1_000_000_000 if payment_amount_mist else (float(data.amount) if data.amount else 0)
+        record_amount_mist = payment_amount_mist if payment_amount_mist else int(payment_amount_sui * 1_000_000_000)
         transactions.append({
             "transaction_id": data.transaction_id,
             "pool_id": data.pool_id,
             "wallet": data.wallet,
-            "amount": payment_amount,
+            "amount_mist": record_amount_mist,
+            "amount_sui": payment_amount_sui,
             "type": "entry_fee",
             "timestamp": int(time.time() * 1000),
             "verified": transaction_verified
         })
     
     # Add to escrow if transaction verified
-    if transaction_verified and payment_amount > 0:
-        escrow_funds[data.pool_id] += payment_amount
-    
+    if transaction_verified and payment_amount_mist > 0:
+        escrow_funds[data.pool_id] += payment_amount_mist
+
     # Add wallet to pool participants with full record
     now_ts = int(time.time())
     pool_participants[data.pool_id].append({

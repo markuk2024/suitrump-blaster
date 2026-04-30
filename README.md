@@ -49,6 +49,7 @@ Edit `backend/config.py` with your:
 - Sui network RPC URL
 - Admin wallet private key
 - Contract package ID
+- (Optional) Persistent storage path via `DATA_FILE`. On Render, attach a disk and set `DATA_FILE=/var/data/sui-blaster/data.json` (or similar) so leaderboards and escrow mirrors survive redeploys.
 
 ### 4. Run Backend
 
