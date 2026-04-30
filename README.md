@@ -79,6 +79,7 @@ Open http://localhost:3000 on your mobile device
 
 ## Reward Distribution
 
+- Before rewards go out, **2.5%** (configurable) is skimmed off the prize pool as a dev fee and sent to the dev wallet. So, for example, a 0.20SUI daily pool pays out 0.195SUI to winners after the fee.
 - 1st Place: 40%
 - 2nd Place: 25%
 - 3rd Place: 15%
