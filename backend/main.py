@@ -366,7 +366,14 @@ async def auto_distribute_task():
             
             for pool_id, duration in durations.items():
                 start_time = pool_start_times.get(pool_id, now)
-                if now - start_time >= duration:
+                elapsed = now - start_time
+                if elapsed >= duration:
+                    participants = pool_participants.get(pool_id, [])
+                    escrow_balance = escrow_funds.get(pool_id, 0)
+                    if not participants and escrow_balance <= 0:
+                        print(f"AUTOMATION: Skipping {pool_id} reset (no participants or escrow)")
+                        pool_start_times[pool_id] = now
+                        continue
                     print(f"AUTOMATION: Pool {pool_id} has expired. Starting distribution...")
                     
                     # Check for active games before distributing

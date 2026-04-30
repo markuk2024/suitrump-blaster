@@ -3,6 +3,8 @@ import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import './Pools.css';
 
+const DEV_FEE_PERCENT = 2.5;
+
 function Pools({ walletAddress, onSelectPool, onBack }) {
   const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
   const [pools, setPools] = useState([]);
@@ -156,6 +158,9 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
     <div className="pools-container">
       <button className="back-btn" onClick={onBack}>← Back</button>
       <h2 className="pools-title">Competition Pools v2</h2>
+      <p className="dev-fee-note">
+        Note: A {DEV_FEE_PERCENT}% dev fee is deducted from every pool before rewards are distributed.
+      </p>
       <div className="pools-grid">
         {pools.map(pool => (
           <div key={pool.id} className="pool-card">
@@ -165,6 +170,16 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
               <p>💰 Entry Fee: {pool.entry_fee}</p>
               <p>🏆 Prize Pool: {pool.prize}</p>
               <p>👥 Players: {pool.players}</p>
+              {(() => {
+                const prizeValue = parseFloat(pool.prize);
+                if (Number.isNaN(prizeValue)) return null;
+                const netPrize = prizeValue * ((100 - DEV_FEE_PERCENT) / 100);
+                return (
+                  <p className="dev-fee-inline">
+                    After dev fee ({DEV_FEE_PERCENT}%): {netPrize.toFixed(3)} SUI
+                  </p>
+                );
+              })()}
             </div>
             <button 
               className="join-btn"
