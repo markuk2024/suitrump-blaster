@@ -231,7 +231,7 @@ async def call_sui_rpc(method: str, params: List = None):
         response.raise_for_status()
         return response.json()
 
-async def get_sui_balance(address: str):
+async def get_sui_balance(address: str) -> float:
     """Get SUI balance for an address"""
     try:
         result = await call_sui_rpc("suix_getBalance", [address, "0x2::sui::SUI"])
@@ -241,6 +241,37 @@ async def get_sui_balance(address: str):
     except Exception as e:
         print(f"Error getting balance: {e}")
         return 0
+
+async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
+    """Fetch the pool.balance field directly from the on-chain Move object"""
+    if not pool_object_id or pool_object_id == "0x0":
+        return None
+    try:
+        params = [
+            pool_object_id,
+            {
+                "showContent": True,
+                "showType": True,
+                "showOwner": False,
+                "showPreviousTransaction": False,
+                "showStorageRebate": False,
+                "showDisplay": False
+            }
+        ]
+        result = await call_sui_rpc("sui_getObject", params)
+        data = result.get("result", {}).get("data", {})
+        content = data.get("content", {})
+        fields = content.get("fields", {})
+        balance_value = fields.get("balance")
+        if balance_value is None:
+            return None
+        if isinstance(balance_value, str):
+            return int(balance_value)
+        if isinstance(balance_value, (int, float)):
+            return int(balance_value)
+    except Exception as e:
+        print(f"Error fetching on-chain pool balance for {pool_object_id}: {e}")
+    return None
 
 async def verify_sui_transaction(transaction_id: str, pool_id: str, expected_entry_fee: int):
     """Verify a Sui transaction and extract payment details"""
@@ -580,23 +611,34 @@ def get_leaderboard(pool_id: Optional[str] = None):
     return {"leaderboard": global_leaderboard[:10]}
 
 @app.get("/pools")
-def get_pools():
+async def get_pools():
     pools_with_prize = []
-    print(f"DEBUG: Current escrow funds state: {dict(escrow_funds)}")
+    state_changed = False
+    print(f"DEBUG: Current escrow funds state (pre-sync): {dict(escrow_funds)}")
     for pool in pool_data.values():
         pool_copy = pool.copy()
-        # Calculate current prize pool from escrow balance (convert MIST to SUI)
         raw_mist = escrow_funds.get(pool["id"], 0)
+
+        contract_id = pool_copy.get("contract_id")
+        onchain_balance = await fetch_pool_balance_onchain(contract_id) if contract_id else None
+        if onchain_balance is not None and onchain_balance != raw_mist:
+            raw_mist = onchain_balance
+            escrow_funds[pool["id"]] = raw_mist
+            state_changed = True
+
         current_prize = raw_mist / 1_000_000_000
-        
-        # Safety: If the prize looks impossible (e.g. 100M SUI), something is wrong with the data
+
         if current_prize > 1_000_000:
             print(f"WARNING: Insane prize detected for {pool['id']}: {current_prize}")
             current_prize = 0.0
-            
+        
         pool_copy["current_prize"] = f"{current_prize:.2f} SUI"
         pool_copy["prize"] = f"{current_prize:.2f} SUI (Dynamic)"
         pools_with_prize.append(pool_copy)
+
+    if state_changed:
+        save_data()
+
     return {
         "pools": pools_with_prize,
         "version": "2.0.4",
