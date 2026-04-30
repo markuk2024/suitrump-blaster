@@ -71,6 +71,13 @@ class PayoutRequest(BaseModel):
 # Data persistence
 DATA_FILE = os.getenv("DATA_FILE", os.path.join(os.getcwd(), "data.json"))
 
+# Pool durations (seconds)
+POOL_DURATIONS = {
+    "daily": 24 * 3600,
+    "weekly": 7 * 24 * 3600,
+    "monthly": 28 * 24 * 3600
+}
+
 
 def _ensure_data_dir():
     data_dir = os.path.dirname(DATA_FILE)
@@ -457,14 +464,7 @@ async def auto_distribute_task():
         try:
             now = int(time.time())
             
-            # Pool durations in seconds
-            durations = {
-                "daily": 24 * 3600,
-                "weekly": 7 * 24 * 3600,
-                "monthly": 28 * 24 * 3600
-            }
-            
-            for pool_id, duration in durations.items():
+            for pool_id, duration in POOL_DURATIONS.items():
                 start_time = pool_start_times.get(pool_id, now)
                 elapsed = now - start_time
                 if elapsed >= duration:
@@ -634,6 +634,24 @@ async def get_pools():
         
         pool_copy["current_prize"] = f"{current_prize:.2f} SUI"
         pool_copy["prize"] = f"{current_prize:.2f} SUI (Dynamic)"
+
+        # Add countdown metadata
+        duration_seconds = POOL_DURATIONS.get(pool["id"])
+        start_time = pool_start_times.get(pool["id"], int(time.time()))
+        if duration_seconds:
+            now_ts = int(time.time())
+            elapsed = max(0, now_ts - start_time)
+            remaining = max(duration_seconds - elapsed, 0)
+            pool_copy["seconds_remaining"] = remaining
+            pool_copy["duration_seconds"] = duration_seconds
+            pool_copy["started_at"] = start_time
+            pool_copy["ends_at"] = start_time + duration_seconds
+        else:
+            pool_copy["seconds_remaining"] = None
+            pool_copy["duration_seconds"] = None
+            pool_copy["started_at"] = start_time
+            pool_copy["ends_at"] = None
+
         pools_with_prize.append(pool_copy)
 
     if state_changed:

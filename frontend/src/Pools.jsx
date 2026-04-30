@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import './Pools.css';
@@ -10,10 +10,46 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
   const [pools, setPools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
 
   useEffect(() => {
     fetchPools();
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTs(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatCountdown = (seconds) => {
+    if (seconds == null) return null;
+    const rem = Math.max(0, seconds);
+    const days = Math.floor(rem / 86400);
+    const hours = Math.floor((rem % 86400) / 3600);
+    const minutes = Math.floor((rem % 3600) / 60);
+    const secs = rem % 60;
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    parts.push(String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0') + ':' + String(secs).padStart(2, '0'));
+    return parts.join(' ');
+  };
+
+  const poolsWithCountdown = useMemo(() => {
+    return pools.map((pool) => {
+      const endsAtSeconds = typeof pool.ends_at === 'number' ? pool.ends_at : null;
+      const serverRemaining = typeof pool.seconds_remaining === 'number' ? pool.seconds_remaining : null;
+      const liveRemaining = endsAtSeconds
+        ? Math.max(0, Math.floor(endsAtSeconds - nowTs / 1000))
+        : (serverRemaining != null ? Math.max(0, serverRemaining - Math.floor(nowTs / 1000)) : null);
+      return {
+        ...pool,
+        _endsAtSeconds: endsAtSeconds,
+        _secondsRemainingLive: liveRemaining,
+      };
+    });
+  }, [pools, nowTs]);
 
   const fetchPools = async () => {
     try {
@@ -162,11 +198,16 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
         Note: A {DEV_FEE_PERCENT}% dev fee is deducted from every pool before rewards are distributed.
       </p>
       <div className="pools-grid">
-        {pools.map(pool => (
+        {poolsWithCountdown.map(pool => (
           <div key={pool.id} className="pool-card">
             <h3 className="pool-name">{pool.name}</h3>
             <div className="pool-info">
               <p>⏱️ Duration: {pool.duration}</p>
+              {pool._secondsRemainingLive != null && (
+                <p className="pool-countdown">
+                  🕒 Time remaining: {formatCountdown(pool._secondsRemainingLive)}
+                </p>
+              )}
               <p>💰 Entry Fee: {pool.entry_fee}</p>
               <p>🏆 Prize Pool: {pool.prize}</p>
               <p>👥 Players: {pool.players}</p>

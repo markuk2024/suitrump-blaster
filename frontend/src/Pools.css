@@ -31,6 +31,12 @@
   font-size: 14px;
 }
 
+.pool-countdown {
+  font-weight: 600;
+  color: #fbd38d;
+  letter-spacing: 0.5px;
+}
+
 .enter-btn {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
