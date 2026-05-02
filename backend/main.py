@@ -71,11 +71,34 @@ class PayoutRequest(BaseModel):
 # Data persistence
 DATA_FILE = os.getenv("DATA_FILE", os.path.join(os.getcwd(), "data.json"))
 
+
+def _get_duration_override(env_name: str, default_seconds: int) -> int:
+    """Allow overriding a pool duration via environment variable (seconds)."""
+    value = os.getenv(env_name)
+    if not value:
+        return default_seconds
+    try:
+        parsed = int(value)
+        if parsed <= 0:
+            raise ValueError
+        print(f"Using {env_name} override: {parsed} seconds")
+        return parsed
+    except ValueError:
+        print(f"Invalid {env_name}='{value}', falling back to {default_seconds}")
+        return default_seconds
+
+
 # Pool durations (seconds)
 POOL_DURATIONS = {
-    "daily": 24 * 3600,
-    "weekly": 7 * 24 * 3600,
-    "monthly": 28 * 24 * 3600
+    "daily": _get_duration_override("POOL_DURATION_DAILY_SECONDS", 24 * 60),
+    "weekly": _get_duration_override("POOL_DURATION_WEEKLY_SECONDS", 7 * 24 * 3600),
+    "monthly": _get_duration_override("POOL_DURATION_MONTHLY_SECONDS", 28 * 24 * 3600)
+}
+
+POOL_PAYOUTS = {
+    "daily": [50, 30, 20],
+    "weekly": [40, 25, 20, 15],
+    "monthly": [45, 25, 20, 10]
 }
 
 
@@ -634,6 +657,7 @@ async def get_pools():
         
         pool_copy["current_prize"] = f"{current_prize:.2f} SUI"
         pool_copy["prize"] = f"{current_prize:.2f} SUI (Dynamic)"
+        pool_copy["payout_structure"] = POOL_PAYOUTS.get(pool["id"], [])
 
         # Add countdown metadata
         duration_seconds = POOL_DURATIONS.get(pool["id"])
@@ -891,15 +915,7 @@ async def distribute_rewards(data: PayoutRequest):
         # Record dev fee
         dev_fees_collected[data.pool_id] += dev_fee
         
-        # Calculate reward percentages based on pool type
-        if data.pool_id == "daily":
-            reward_percentages = [100]  # 1st place gets everything
-        elif data.pool_id == "weekly":
-            reward_percentages = [33.33, 33.33, 33.34]  # Top 3 split
-        elif data.pool_id == "monthly":
-            reward_percentages = [25, 25, 25, 25]  # Top 4 split
-        else:
-            reward_percentages = [100]
+        reward_percentages = POOL_PAYOUTS.get(data.pool_id, [100])
             
         payouts = []
         winners = [] # List of (address, amount_mist)
