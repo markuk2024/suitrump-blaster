@@ -17,8 +17,8 @@ try:
     from pysui.sui_types.scalars import SuiString, SuiU64
     from pysui.sui_types.collections import SuiArray
     HAS_PYSUI = True
-except ImportError:
-    print("pysui not installed - using simulation mode")
+except ImportError as e:
+    print(f"pysui import failed ({e}) - using simulation mode")
     HAS_PYSUI = False
 
 
