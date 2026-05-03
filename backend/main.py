@@ -405,7 +405,7 @@ async def call_smart_contract(function: str, args: list):
                 # Initialize Sui client with admin key
                 cfg = SuiConfig.user_config(
                     rpc_url=config.SUI_NETWORK,
-                    private_key=admin_key
+                    prv_keys=[admin_key]
                 )
                 client = SyncClient(cfg)
                 
