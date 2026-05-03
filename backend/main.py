@@ -404,7 +404,6 @@ async def call_smart_contract(function: str, args: list):
             try:
                 # Initialize Sui client with admin key
                 cfg = SuiConfig.user_config(
-                    keystore_file=None,
                     rpc_url=config.SUI_NETWORK,
                     private_key=admin_key
                 )
