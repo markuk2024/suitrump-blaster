@@ -410,7 +410,7 @@ async def call_smart_contract(function: str, args: list):
                 client = SyncClient(cfg)
                 
                 # Build and execute transaction
-                txer = client.init_transaction()
+                txer = client.transaction()
                 
                 if function == "distribute_rewards":
                     # args: [pool_object_id, [(winner_addr, amount_mist), ...]]
