@@ -157,6 +157,34 @@ def get_pool_wallets(pool_id):
             wallets.append(p.get("wallet", ""))
     return wallets
 
+
+def prune_global_leaderboard_entries() -> bool:
+    """Remove global leaderboard entries that no longer exist in pool leaderboards."""
+    global global_leaderboard
+    if not global_leaderboard:
+        return False
+
+    cleaned = []
+    for entry in global_leaderboard:
+        pool_id = entry.get("pool_id")
+        if not pool_id:
+            cleaned.append(entry)
+            continue
+
+        pool_scores = pool_leaderboards.get(pool_id, [])
+        if any(
+            score.get("wallet") == entry.get("wallet")
+            and score.get("score") == entry.get("score")
+            and score.get("timestamp") == entry.get("timestamp")
+            for score in pool_scores
+        ):
+            cleaned.append(entry)
+
+    if len(cleaned) != len(global_leaderboard):
+        global_leaderboard = cleaned
+        return True
+    return False
+
 def load_data():
     """Load data from local JSON file"""
     global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, pool_start_times, active_games, pool_history
@@ -203,6 +231,10 @@ def load_data():
             "weekly": loaded_start_times.get("weekly", now),
             "monthly": loaded_start_times.get("monthly", now)
         }
+
+        # Clean up stale leaderboard entries that reference cleared pools
+        if prune_global_leaderboard_entries():
+            save_data()
     except Exception as e:
         print(f"Error loading data: {e}")
         print("Starting with empty data")
@@ -666,6 +698,8 @@ def submit_score(data: ScoreData):
 
 @app.get("/leaderboard")
 def get_leaderboard(pool_id: Optional[str] = None):
+    if prune_global_leaderboard_entries():
+        save_data()
     if pool_id and pool_id in pool_leaderboards:
         return {"leaderboard": pool_leaderboards[pool_id][:10], "pool_id": pool_id}
     return {"leaderboard": global_leaderboard[:10]}
@@ -679,6 +713,7 @@ async def get_pools():
         pool_copy = pool.copy()
         raw_mist = escrow_funds.get(pool["id"], 0)
         pool_copy["players"] = len(pool_participants.get(pool["id"], []))
+        participants_list = pool_participants.get(pool["id"], [])
 
         contract_id = pool_copy.get("contract_id")
         onchain_balance = await fetch_pool_balance_onchain(contract_id) if contract_id else None
@@ -698,21 +733,23 @@ async def get_pools():
         pool_copy["payout_structure"] = POOL_PAYOUTS.get(pool["id"], [])
 
         # Add countdown metadata
-        duration_seconds = POOL_DURATIONS.get(pool["id"])
-        start_time = pool_start_times.get(pool["id"], int(time.time()))
-        if duration_seconds:
-            now_ts = int(time.time())
-            elapsed = max(0, now_ts - start_time)
-            remaining = max(duration_seconds - elapsed, 0)
-            pool_copy["seconds_remaining"] = remaining
-            pool_copy["duration_seconds"] = duration_seconds
-            pool_copy["started_at"] = start_time
-            pool_copy["ends_at"] = start_time + duration_seconds
-        else:
-            pool_copy["seconds_remaining"] = None
-            pool_copy["duration_seconds"] = None
-            pool_copy["started_at"] = start_time
-            pool_copy["ends_at"] = None
+        duration = POOL_DURATIONS.get(pool["id"], 24 * 3600)
+        now_ts = int(time.time())
+        start_time = pool_start_times.get(pool["id"], now_ts)
+
+        # If the pool completed and has no active players or leaderboard entries, auto-reset the timer
+        if duration and now_ts >= start_time + duration:
+            if not pool_leaderboards.get(pool["id"]) and not participants_list:
+                start_time = now_ts
+                pool_start_times[pool["id"]] = start_time
+                state_changed = True
+
+        time_left_seconds = max(0, start_time + duration - now_ts)
+        
+        pool_copy["time_left_seconds"] = time_left_seconds
+        pool_copy["time_left_formatted"] = str(timedelta(seconds=time_left_seconds))
+        pool_copy["started_at"] = start_time
+        pool_copy["ends_at"] = start_time + duration if duration else None
 
         pools_with_prize.append(pool_copy)
 
