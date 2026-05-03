@@ -286,14 +286,14 @@ async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
     # First try to read the Balance<SUI> dynamic field that actually holds escrow funds.
     if config.PACKAGE_ID:
         try:
-            params = [{
-                "parentId": pool_object_id,
-                "name": {
+            params = [
+                pool_object_id,
+                {
                     "type": f"{config.PACKAGE_ID}::pool::EscrowKey",
                     "value": {}
                 }
-            }]
-            dyn_result = await call_sui_rpc("sui_getDynamicFieldObject", params)
+            ]
+            dyn_result = await call_sui_rpc("suix_getDynamicFieldObject", params)
             dyn_data = dyn_result.get("result", {}).get("data", {})
             dyn_content = dyn_data.get("content", {})
             dyn_fields = dyn_content.get("fields", {})
@@ -1009,6 +1009,13 @@ async def distribute_rewards(data: PayoutRequest):
             # Clear escrow after distribution (contract handles actual transfer)
             escrow_funds[data.pool_id] = 0
             dev_fees_collected[data.pool_id] = 0  # Contract handles dev fee transfer
+            pool_leaderboards[data.pool_id] = []
+            pool_participants[data.pool_id] = []
+            pool_start_times[data.pool_id] = int(time.time())
+            # Remove any lingering active game entries for this pool
+            for wallet in list(active_games.keys()):
+                if active_games[wallet].get("pool_id") == data.pool_id:
+                    del active_games[wallet]
             
             # Save data to file
             save_data()
