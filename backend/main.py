@@ -678,6 +678,7 @@ async def get_pools():
     for pool in pool_data.values():
         pool_copy = pool.copy()
         raw_mist = escrow_funds.get(pool["id"], 0)
+        pool_copy["players"] = len(pool_participants.get(pool["id"], []))
 
         contract_id = pool_copy.get("contract_id")
         onchain_balance = await fetch_pool_balance_onchain(contract_id) if contract_id else None
@@ -928,6 +929,7 @@ async def reset_data():
 async def distribute_rewards(data: PayoutRequest):
     """Distribute rewards to winners of a pool"""
     try:
+        global global_leaderboard
         if data.pool_id not in pool_leaderboards:
             raise HTTPException(status_code=404, detail="Pool not found")
         
@@ -1011,6 +1013,9 @@ async def distribute_rewards(data: PayoutRequest):
             dev_fees_collected[data.pool_id] = 0  # Contract handles dev fee transfer
             pool_leaderboards[data.pool_id] = []
             pool_participants[data.pool_id] = []
+            if data.pool_id in pool_data:
+                pool_data[data.pool_id]["players"] = 0
+            global_leaderboard = [entry for entry in global_leaderboard if entry.get("pool_id") != data.pool_id]
             pool_start_times[data.pool_id] = int(time.time())
             # Remove any lingering active game entries for this pool
             for wallet in list(active_games.keys()):
