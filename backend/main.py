@@ -437,7 +437,8 @@ async def call_smart_contract(function: str, args: list):
                         "transaction_id": f"sim_{int(time.time())}"
                     }
                 
-                result = handle_result(client.execute_transaction(txer))
+                result = client.execute(txer)
+                result = handle_result(result)
                 tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
                 
                 print(f"Transaction succeeded: {tx_digest}")
