@@ -528,23 +528,28 @@ async def auto_distribute_task():
                         "auto_distribution": True
                     })
                     
-                    # Call the distribution logic
-                    # We wrap this in a PayoutRequest object to reuse the existing logic
+                    # Call the distribution logic (reuse existing endpoint)
                     try:
-                        await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
+                        result = await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
                     except Exception as dist_err:
                         print(f"AUTOMATION: Distribution failed for {pool_id}: {dist_err}")
-                    
-                    # Reset pool for the next period
+                        continue
+
+                    status = result.get("status") if isinstance(result, dict) else None
+                    if status != "success":
+                        print(f"AUTOMATION: Distribution did not complete for {pool_id} (status={status}). Pool will remain open for manual retry.")
+                        continue
+
+                    # Reset pool for the next period only when payout succeeded
                     pool_start_times[pool_id] = now
                     pool_leaderboards[pool_id] = []
                     pool_participants[pool_id] = []
-                    
+
                     # Clear completed/abandoned game sessions for this pool
                     for wallet in list(active_games.keys()):
                         if active_games[wallet].get("pool_id") == pool_id:
                             del active_games[wallet]
-                    
+
                     save_data()
                     print(f"AUTOMATION: Pool {pool_id} reset for new period.")
             
@@ -906,12 +911,14 @@ async def distribute_rewards(data: PayoutRequest):
         leaderboard = pool_leaderboards[data.pool_id][:data.num_winners]
         
         if not leaderboard:
+            print(f"PAYOUT: {data.pool_id} distribution skipped - no leaderboard entries during payout")
             return {"status": "no_scores", "message": "No scores to distribute rewards for"}
         
         # Use actual escrow balance as prize pool (dynamic based on entry fees)
         prize_amount = escrow_funds[data.pool_id]
         
         if prize_amount <= 0:
+            print(f"PAYOUT: {data.pool_id} distribution skipped - escrow balance is {prize_amount}")
             return {"status": "no_funds", "message": "No funds in prize pool"}
         
         # Calculate and deduct dev fee
