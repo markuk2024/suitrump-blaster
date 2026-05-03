@@ -290,7 +290,7 @@ async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
                 pool_object_id,
                 {
                     "type": f"{config.PACKAGE_ID}::pool::EscrowKey",
-                    "value": {}
+                    "value": {"dummy_field": False}
                 }
             ]
             dyn_result = await call_sui_rpc("suix_getDynamicFieldObject", params)
