@@ -279,9 +279,35 @@ async def get_sui_balance(address: str) -> float:
         return 0
 
 async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
-    """Fetch the pool.balance field directly from the on-chain Move object"""
+    """Fetch the live escrow balance stored in the pool's dynamic field."""
     if not pool_object_id or pool_object_id == "0x0":
         return None
+
+    # First try to read the Balance<SUI> dynamic field that actually holds escrow funds.
+    if config.PACKAGE_ID:
+        try:
+            params = [{
+                "parentId": pool_object_id,
+                "name": {
+                    "type": f"{config.PACKAGE_ID}::pool::EscrowKey",
+                    "value": {}
+                }
+            }]
+            dyn_result = await call_sui_rpc("sui_getDynamicFieldObject", params)
+            dyn_data = dyn_result.get("result", {}).get("data", {})
+            dyn_content = dyn_data.get("content", {})
+            dyn_fields = dyn_content.get("fields", {})
+            balance_struct = dyn_fields.get("value")  # Balance<SUI>
+            if isinstance(balance_struct, dict):
+                balance_value = balance_struct.get("fields", {}).get("value")
+            else:
+                balance_value = balance_struct
+            if balance_value is not None:
+                return int(balance_value)
+        except Exception as e:
+            print(f"Error fetching dynamic escrow balance for {pool_object_id}: {e}")
+
+    # Fall back to legacy `pool.balance` field if dynamic fetch fails.
     try:
         params = [
             pool_object_id,
