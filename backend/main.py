@@ -12,7 +12,7 @@ import httpx
 
 # Sui Imports
 try:
-    from pysui import SuiConfig, SyncClient, handle_result
+    from pysui import SuiConfig, SyncClient, handle_result, ObjectID
     try:
         from pysui.sui.sui_types.address import SuiAddress
         from pysui.sui.sui_types.scalars import SuiString, SuiU64
@@ -426,7 +426,7 @@ async def call_smart_contract(function: str, args: list):
                     
                     txer.move_call(
                         target=f"{config.PACKAGE_ID}::pool::distribute_rewards",
-                        arguments=[SuiAddress(pool_id), winner_addrs, winner_amounts]
+                        arguments=[ObjectID(pool_id), winner_addrs, winner_amounts]
                     )
                 else:
                     # Generic fallback - just simulate for unsupported functions
