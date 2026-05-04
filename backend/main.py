@@ -97,7 +97,7 @@ def _get_duration_override(env_name: str, default_seconds: int) -> int:
 
 # Pool durations (seconds)
 POOL_DURATIONS = {
-    "daily": _get_duration_override("POOL_DURATION_DAILY_SECONDS", 24 * 60),
+    "daily": _get_duration_override("POOL_DURATION_DAILY_SECONDS", 24 * 3600),
     "weekly": _get_duration_override("POOL_DURATION_WEEKLY_SECONDS", 7 * 24 * 3600),
     "monthly": _get_duration_override("POOL_DURATION_MONTHLY_SECONDS", 28 * 24 * 3600)
 }
@@ -316,7 +316,46 @@ async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
     if not pool_object_id or pool_object_id == "0x0":
         return None
 
-    # First try to read the Balance<SUI> dynamic field that actually holds escrow funds.
+    # Attempt to locate the EscrowKey dynamic field generically so we don't rely on a specific package ID.
+    try:
+        fields_resp = await call_sui_rpc("suix_getDynamicFields", [pool_object_id, None, 50])
+        field_entries = fields_resp.get("result", {}).get("data", [])
+        escrow_field_id = None
+
+        for entry in field_entries:
+            name_info = entry.get("name", {})
+            name_type = name_info.get("type", "")
+            if name_type and name_type.endswith("EscrowKey"):
+                escrow_field_id = entry.get("objectId")
+                break
+
+        if escrow_field_id:
+            params = [
+                escrow_field_id,
+                {
+                    "showContent": True,
+                    "showType": False,
+                    "showOwner": False,
+                    "showPreviousTransaction": False,
+                    "showStorageRebate": False,
+                    "showDisplay": False
+                }
+            ]
+            dyn_result = await call_sui_rpc("sui_getObject", params)
+            dyn_data = dyn_result.get("result", {}).get("data", {})
+            dyn_content = dyn_data.get("content", {})
+            dyn_fields = dyn_content.get("fields", {})
+            balance_struct = dyn_fields.get("value")
+            if isinstance(balance_struct, dict):
+                balance_value = balance_struct.get("fields", {}).get("value")
+            else:
+                balance_value = balance_struct
+            if balance_value is not None:
+                return int(balance_value)
+    except Exception as e:
+        print(f"Error fetching dynamic fields for {pool_object_id}: {e}")
+
+    # Fall back to legacy direct field lookup (older deployments may still rely on it).
     if config.PACKAGE_ID:
         try:
             params = [
@@ -330,7 +369,7 @@ async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
             dyn_data = dyn_result.get("result", {}).get("data", {})
             dyn_content = dyn_data.get("content", {})
             dyn_fields = dyn_content.get("fields", {})
-            balance_struct = dyn_fields.get("value")  # Balance<SUI>
+            balance_struct = dyn_fields.get("value")
             if isinstance(balance_struct, dict):
                 balance_value = balance_struct.get("fields", {}).get("value")
             else:
@@ -338,9 +377,9 @@ async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
             if balance_value is not None:
                 return int(balance_value)
         except Exception as e:
-            print(f"Error fetching dynamic escrow balance for {pool_object_id}: {e}")
+            print(f"Error fetching dynamic escrow balance via package lookup for {pool_object_id}: {e}")
 
-    # Fall back to legacy `pool.balance` field if dynamic fetch fails.
+    # Fall back to legacy `pool.balance` field if dynamic fetch fails entirely.
     try:
         params = [
             pool_object_id,
