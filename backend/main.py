@@ -204,15 +204,20 @@ def load_data():
         
         global_leaderboard = data.get("global_leaderboard", [])
         pool_leaderboards = defaultdict(list, {k: v for k, v in data.get("pool_leaderboards", {}).items()})
-        pool_data = data.get("pool_data", {
-            "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.DAILY_POOL_ID},
-            "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.WEEKLY_POOL_ID},
-            "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.MONTHLY_POOL_ID}
-        })
-        # Always ensure latest contract IDs from config are applied to pools
-        if "daily" in pool_data: pool_data["daily"]["contract_id"] = config.DAILY_POOL_ID
-        if "weekly" in pool_data: pool_data["weekly"]["contract_id"] = config.WEEKLY_POOL_ID
-        if "monthly" in pool_data: pool_data["monthly"]["contract_id"] = config.MONTHLY_POOL_ID
+        pool_data = data.get("pool_data", pool_data.copy())
+        # Ensure latest defaults (name/duration/entry fee) and contract IDs override stale stored values
+        for pool_id, defaults in DEFAULT_POOL_SETTINGS.items():
+            if pool_id not in pool_data:
+                pool_data[pool_id] = {
+                    "id": pool_id,
+                    "prize": "0 SUI",
+                    "players": 0,
+                }
+            pool_data[pool_id]["id"] = pool_id
+            pool_data[pool_id]["name"] = defaults["name"]
+            pool_data[pool_id]["duration"] = defaults["duration"]
+            pool_data[pool_id]["entry_fee"] = defaults["entry_fee"]
+            pool_data[pool_id]["contract_id"] = getattr(config, f"{pool_id.upper()}_POOL_ID", "0x0")
         
         transactions = data.get("transactions", [])
         escrow_funds = defaultdict(float, {k: v for k, v in data.get("escrow_funds", {}).items()})
@@ -265,10 +270,23 @@ def save_data():
 # In-memory storage (in production, use a database)
 global_leaderboard = []
 pool_leaderboards = defaultdict(list)  # pool_id -> list of scores
+DEFAULT_POOL_SETTINGS = {
+    "daily": {"name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI"},
+    "weekly": {"name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI"},
+    "monthly": {"name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI"}
+}
+
 pool_data = {
-    "daily": {"id": "daily", "name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.DAILY_POOL_ID},
-    "weekly": {"id": "weekly", "name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.WEEKLY_POOL_ID},
-    "monthly": {"id": "monthly", "name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI", "prize": "0 SUI", "players": 0, "contract_id": config.MONTHLY_POOL_ID}
+    pool_id: {
+        "id": pool_id,
+        "name": settings["name"],
+        "duration": settings["duration"],
+        "entry_fee": settings["entry_fee"],
+        "prize": "0 SUI",
+        "players": 0,
+        "contract_id": getattr(config, f"{pool_id.upper()}_POOL_ID", "0x0")
+    }
+    for pool_id, settings in DEFAULT_POOL_SETTINGS.items()
 }
 
 # Transaction recording system
@@ -1019,29 +1037,29 @@ async def distribute_rewards(data: PayoutRequest):
             print(f"PAYOUT: {data.pool_id} distribution skipped - no leaderboard entries during payout")
             return {"status": "no_scores", "message": "No scores to distribute rewards for"}
         
-        # Use actual escrow balance as prize pool (dynamic based on entry fees)
-        prize_amount = escrow_funds[data.pool_id]
+        # Use actual escrow balance as prize pool (stored in Mist)
+        prize_amount_mist = int(escrow_funds[data.pool_id])
         
-        if prize_amount <= 0:
-            print(f"PAYOUT: {data.pool_id} distribution skipped - escrow balance is {prize_amount}")
+        if prize_amount_mist <= 0:
+            print(f"PAYOUT: {data.pool_id} distribution skipped - escrow balance is {prize_amount_mist}")
             return {"status": "no_funds", "message": "No funds in prize pool"}
         
-        # Calculate and deduct dev fee
-        dev_fee = prize_amount * (config.DEV_FEE_PERCENTAGE / 100)
-        prize_after_fee = prize_amount - dev_fee
+        # Calculate and deduct dev fee (keep in Mist)
+        dev_fee_mist = int(prize_amount_mist * (config.DEV_FEE_PERCENTAGE / 100))
+        prize_after_fee_mist = max(prize_amount_mist - dev_fee_mist, 0)
         
         # Record dev fee
-        dev_fees_collected[data.pool_id] += dev_fee
+        dev_fees_collected[data.pool_id] += dev_fee_mist
         
         reward_percentages = POOL_PAYOUTS.get(data.pool_id, [100])
             
         payouts = []
         winners = [] # List of (address, amount_mist)
         
-        # Add Dev Fee to the winners list so it gets paid at the same time
-        if dev_fee > 0:
+        # Add Dev Fee to the winners list
+        if dev_fee_mist > 0:
             dev_wallet = config.DEV_WALLET_ADDRESS
-            winners.append((dev_wallet, int(dev_fee * 1_000_000_000)))
+            winners.append((dev_wallet, dev_fee_mist))
         
         # We pay out to the number of winners specified in reward_percentages, 
         # but only if there are enough people on the leaderboard.
@@ -1050,19 +1068,25 @@ async def distribute_rewards(data: PayoutRequest):
         
         # Adjust percentages if fewer winners than slots
         if actual_winners_count > 0 and actual_winners_count < num_to_pay:
-            adjusted_pct = 100 / actual_winners_count
-            reward_percentages = [adjusted_pct] * actual_winners_count
+            # Re-calculate reward_percentages to distribute 100% among actual winners
+            total_slots_pct = sum(reward_percentages[:actual_winners_count])
+            if total_slots_pct > 0:
+                reward_percentages = [(p / total_slots_pct) * 100 for p in reward_percentages[:actual_winners_count]]
+            else:
+                adjusted_pct = 100 / actual_winners_count
+                reward_percentages = [adjusted_pct] * actual_winners_count
         
         for i in range(actual_winners_count):
             entry = leaderboard[i]
-            reward = prize_after_fee * (reward_percentages[i] / 100)
+            reward_mist = int(prize_after_fee_mist * (reward_percentages[i] / 100))
+            reward_sui = reward_mist / 1_000_000_000
             payouts.append({
                 "rank": i + 1,
                 "wallet": entry["wallet"],
                 "score": entry["score"],
-                "reward": f"{reward:.2f} SUI"
+                "reward": f"{reward_sui:.3f} SUI"
             })
-            winners.append((entry["wallet"], int(reward * 1_000_000_000)))  # Convert to MIST
+            winners.append((entry["wallet"], reward_mist))
         
         # Call smart contract to distribute rewards
         contract_result = await call_smart_contract("distribute_rewards", [
@@ -1075,9 +1099,9 @@ async def distribute_rewards(data: PayoutRequest):
             pool_history.append({
                 "pool_id": data.pool_id,
                 "distributed_at": int(time.time()),
-                "total_prize": prize_amount,
-                "dev_fee": dev_fee,
-                "prize_after_fee": prize_after_fee,
+                "total_prize_mist": prize_amount_mist,
+                "dev_fee_mist": dev_fee_mist,
+                "prize_after_fee_mist": prize_after_fee_mist,
                 "num_winners": len(payouts),
                 "payouts": payouts,
                 "participants": [p.get("wallet") if isinstance(p, dict) else p for p in pool_participants.get(data.pool_id, [])],
@@ -1087,12 +1111,16 @@ async def distribute_rewards(data: PayoutRequest):
             
             # Clear escrow after distribution (contract handles actual transfer)
             escrow_funds[data.pool_id] = 0
-            dev_fees_collected[data.pool_id] = 0  # Contract handles dev fee transfer
+            dev_fees_collected[data.pool_id] = 0
             pool_leaderboards[data.pool_id] = []
             pool_participants[data.pool_id] = []
             if data.pool_id in pool_data:
                 pool_data[data.pool_id]["players"] = 0
+            
+            # Remove from global leaderboard
+            global global_leaderboard
             global_leaderboard = [entry for entry in global_leaderboard if entry.get("pool_id") != data.pool_id]
+            
             pool_start_times[data.pool_id] = int(time.time())
             # Remove any lingering active game entries for this pool
             for wallet in list(active_games.keys()):
@@ -1105,9 +1133,9 @@ async def distribute_rewards(data: PayoutRequest):
             return {
                 "status": "success",
                 "pool_id": data.pool_id,
-                "total_prize": f"{prize_amount:.2f} SUI (from escrow)",
-                "dev_fee": f"{dev_fee:.2f} SUI ({config.DEV_FEE_PERCENTAGE}%)",
-                "prize_after_fee": f"{prize_after_fee:.2f} SUI",
+                "total_prize": f"{(prize_amount_mist/1e9):.3f} SUI",
+                "dev_fee": f"{(dev_fee_mist/1e9):.3f} SUI ({config.DEV_FEE_PERCENTAGE}%)",
+                "prize_after_fee": f"{(prize_after_fee_mist/1e9):.3f} SUI",
                 "num_winners": len(payouts),
                 "payouts": payouts,
                 "contract_transaction": contract_result["transaction_id"],
