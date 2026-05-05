@@ -204,7 +204,18 @@ def load_data():
         
         global_leaderboard = data.get("global_leaderboard", [])
         pool_leaderboards = defaultdict(list, {k: v for k, v in data.get("pool_leaderboards", {}).items()})
-        pool_data = data.get("pool_data", pool_data.copy())
+        # Load pool data and handle migration from list to dict if necessary
+        raw_pool_data = data.get("pool_data", {})
+        if isinstance(raw_pool_data, list):
+            # Migrate old list format to dict
+            pool_data_dict = {}
+            for p in raw_pool_data:
+                if isinstance(p, dict) and "id" in p:
+                    pool_data_dict[p["id"]] = p
+            pool_data = pool_data_dict
+        else:
+            pool_data = raw_pool_data if raw_pool_data else pool_data.copy()
+
         # Ensure latest defaults (name/duration/entry fee) and contract IDs override stale stored values
         for pool_id, defaults in DEFAULT_POOL_SETTINGS.items():
             if pool_id not in pool_data:
@@ -334,96 +345,48 @@ async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
     if not pool_object_id or pool_object_id == "0x0":
         return None
 
-    # Attempt to locate the EscrowKey dynamic field generically so we don't rely on a specific package ID.
+    # 1. Try generic dynamic field discovery (best for upgraded packages)
     try:
         fields_resp = await call_sui_rpc("suix_getDynamicFields", [pool_object_id, None, 50])
         field_entries = fields_resp.get("result", {}).get("data", [])
-        escrow_field_id = None
-
+        
         for entry in field_entries:
             name_info = entry.get("name", {})
             name_type = name_info.get("type", "")
-            if name_type and name_type.endswith("EscrowKey"):
+            # Match any EscrowKey regardless of package ID
+            if name_type and "::pool::EscrowKey" in name_type:
                 escrow_field_id = entry.get("objectId")
-                break
-
-        if escrow_field_id:
-            params = [
-                escrow_field_id,
-                {
-                    "showContent": True,
-                    "showType": False,
-                    "showOwner": False,
-                    "showPreviousTransaction": False,
-                    "showStorageRebate": False,
-                    "showDisplay": False
-                }
-            ]
-            dyn_result = await call_sui_rpc("sui_getObject", params)
-            dyn_data = dyn_result.get("result", {}).get("data", {})
-            dyn_content = dyn_data.get("content", {})
-            dyn_fields = dyn_content.get("fields", {})
-            balance_struct = dyn_fields.get("value")
-            if isinstance(balance_struct, dict):
-                balance_value = balance_struct.get("fields", {}).get("value")
-            else:
-                balance_value = balance_struct
-            if balance_value is not None:
-                return int(balance_value)
+                if escrow_field_id:
+                    params = [escrow_field_id, {"showContent": True}]
+                    dyn_result = await call_sui_rpc("sui_getObject", params)
+                    dyn_data = dyn_result.get("result", {}).get("data", {})
+                    dyn_fields = dyn_data.get("content", {}).get("fields", {})
+                    balance_struct = dyn_fields.get("value")
+                    
+                    if isinstance(balance_struct, dict):
+                        val = balance_struct.get("fields", {}).get("value")
+                    else:
+                        val = balance_struct
+                        
+                    if val is not None:
+                        print(f"Sync: Found {int(val)} Mist in dynamic field for {pool_object_id}")
+                        return int(val)
     except Exception as e:
-        print(f"Error fetching dynamic fields for {pool_object_id}: {e}")
+        print(f"Generic sync failed for {pool_object_id}: {e}")
 
-    # Fall back to legacy direct field lookup (older deployments may still rely on it).
-    if config.PACKAGE_ID:
-        try:
-            params = [
-                pool_object_id,
-                {
-                    "type": f"{config.PACKAGE_ID}::pool::EscrowKey",
-                    "value": {"dummy_field": False}
-                }
-            ]
-            dyn_result = await call_sui_rpc("suix_getDynamicFieldObject", params)
-            dyn_data = dyn_result.get("result", {}).get("data", {})
-            dyn_content = dyn_data.get("content", {})
-            dyn_fields = dyn_content.get("fields", {})
-            balance_struct = dyn_fields.get("value")
-            if isinstance(balance_struct, dict):
-                balance_value = balance_struct.get("fields", {}).get("value")
-            else:
-                balance_value = balance_struct
-            if balance_value is not None:
-                return int(balance_value)
-        except Exception as e:
-            print(f"Error fetching dynamic escrow balance via package lookup for {pool_object_id}: {e}")
-
-    # Fall back to legacy `pool.balance` field if dynamic fetch fails entirely.
+    # 2. Try legacy 'balance' field (for very old pools or direct storage)
     try:
-        params = [
-            pool_object_id,
-            {
-                "showContent": True,
-                "showType": True,
-                "showOwner": False,
-                "showPreviousTransaction": False,
-                "showStorageRebate": False,
-                "showDisplay": False
-            }
-        ]
+        params = [pool_object_id, {"showContent": True}]
         result = await call_sui_rpc("sui_getObject", params)
-        data = result.get("result", {}).get("data", {})
-        content = data.get("content", {})
-        fields = content.get("fields", {})
-        balance_value = fields.get("balance")
-        if balance_value is None:
-            return None
-        if isinstance(balance_value, str):
-            return int(balance_value)
-        if isinstance(balance_value, (int, float)):
-            return int(balance_value)
+        fields = result.get("result", {}).get("data", {}).get("content", {}).get("fields", {})
+        balance_val = fields.get("balance")
+        if balance_val is not None:
+            print(f"Sync: Found {int(balance_val)} Mist in legacy balance field for {pool_object_id}")
+            return int(balance_val)
     except Exception as e:
-        print(f"Error fetching on-chain pool balance for {pool_object_id}: {e}")
-    return None
+        pass
+
+    return 0
 
 async def verify_sui_transaction(transaction_id: str, pool_id: str, expected_entry_fee: int):
     """Verify a Sui transaction and extract payment details"""
@@ -644,9 +607,9 @@ async def auto_distribute_task():
                         "auto_distribution": True
                     })
                     
-                    # Call the distribution logic (reuse existing endpoint)
+                    # Call the distribution logic (bypass auth for internal automation)
                     try:
-                        result = await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
+                        result = await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10), x_dev_wallet=config.DEV_WALLET_ADDRESS)
                     except Exception as dist_err:
                         print(f"AUTOMATION: Distribution failed for {pool_id}: {dist_err}")
                         continue
@@ -1021,7 +984,7 @@ async def reset_data():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/distribute-rewards")
-async def distribute_rewards(data: PayoutRequest):
+async def distribute_rewards(data: PayoutRequest, x_dev_wallet: str = Depends(dev_wallet_auth)):
     """Distribute rewards to winners of a pool"""
     try:
         global global_leaderboard
