@@ -996,9 +996,21 @@ async def distribute_rewards(data: PayoutRequest, x_dev_wallet: str = Depends(de
         
         leaderboard = pool_leaderboards[data.pool_id][:data.num_winners]
         
+        # RECOVERY LOGIC: If active leaderboard is empty, check history for a distribution that failed to move funds
         if not leaderboard:
-            print(f"PAYOUT: {data.pool_id} distribution skipped - no leaderboard entries during payout")
-            return {"status": "no_scores", "message": "No scores to distribute rewards for"}
+            print(f"PAYOUT: Active leaderboard for {data.pool_id} is empty. Checking history for missed distribution...")
+            for history_entry in reversed(pool_history):
+                if history_entry.get("pool_id") == data.pool_id:
+                    # Found the last archived session for this pool
+                    historical_leaderboard = history_entry.get("leaderboard_at_distribution", [])
+                    if historical_leaderboard:
+                        print(f"PAYOUT: Found {len(historical_leaderboard)} winners in history. Using them for recovery payout.")
+                        leaderboard = historical_leaderboard
+                        break
+        
+        if not leaderboard:
+            print(f"PAYOUT: {data.pool_id} distribution skipped - no leaderboard entries (active or historical) found")
+            return {"status": "no_scores", "message": "No scores to distribute rewards for. If this is a mistake, please submit a test score first."}
         
         # Use actual escrow balance as prize pool (stored in Mist)
         prize_amount_mist = int(escrow_funds[data.pool_id])
