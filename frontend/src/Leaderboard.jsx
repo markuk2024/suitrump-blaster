@@ -5,11 +5,7 @@ function Leaderboard({ onBack, walletAddress }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pools, setPools] = useState({});
-  const [selectedPayoutPool, setSelectedPayoutPool] = useState('daily');
   const [payoutStatus, setPayoutStatus] = useState(null);
-
-  const DEV_WALLET = "0x4c2891f70f1317fed1198140e0f06f49593c82558b2b467e1717c23fee9131a6";
-  const isAdmin = walletAddress && walletAddress.toLowerCase() === DEV_WALLET.toLowerCase();
 
   useEffect(() => {
     fetchLeaderboard();
@@ -109,30 +105,6 @@ function Leaderboard({ onBack, walletAddress }) {
     <div className="leaderboard-wrapper">
       <button className="back-btn" onClick={onBack}>← Back</button>
       <h2 className="section-title">🏆 Leaderboard</h2>
-
-      {isAdmin && (
-        <div className="admin-payout-panel">
-          <h3>Admin Payout Control</h3>
-          <div className="payout-controls">
-            <select 
-              value={selectedPayoutPool} 
-              onChange={(e) => setSelectedPayoutPool(e.target.value)}
-              className="payout-select"
-            >
-              {Object.entries(pools).map(([id, name]) => (
-                <option key={id} value={id}>{name}</option>
-              ))}
-            </select>
-            <button 
-              className="payout-btn"
-              onClick={handlePayout}
-            >
-              💸 Payout Selected Pool
-            </button>
-          </div>
-          {payoutStatus && <div className="payout-status">{payoutStatus}</div>}
-        </div>
-      )}
       
       {loading ? (
         <div className="loading">Loading...</div>
