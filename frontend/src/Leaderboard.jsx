@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import './Leaderboard.css';
 
-function Leaderboard({ onBack }) {
+function Leaderboard({ onBack, walletAddress }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pools, setPools] = useState({});
+  const [selectedPayoutPool, setSelectedPayoutPool] = useState('daily');
   const [payoutStatus, setPayoutStatus] = useState(null);
+
+  const DEV_WALLET = "0x4c2891f70f1317fed1198140e0f06f49593c82558b2b467e1717c23fee9131a6";
+  const isAdmin = walletAddress && walletAddress.toLowerCase() === DEV_WALLET.toLowerCase();
 
   useEffect(() => {
     fetchLeaderboard();
@@ -60,12 +64,13 @@ function Leaderboard({ onBack }) {
   };
 
   const handlePayout = async () => {
-    if (!window.confirm('This will end the current Daily Pool and distribute rewards to the top players. Continue?')) {
+    const poolName = pools[selectedPayoutPool] || selectedPayoutPool;
+    if (!window.confirm(`This will end the current ${poolName} and distribute rewards to the top players. Continue?`)) {
       return;
     }
 
     try {
-      setPayoutStatus('Processing payouts...');
+      setPayoutStatus(`Processing ${poolName} payouts...`);
       let rawApiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
       let apiUrl = rawApiUrl.trim().replace(/^["']|["']$/g, '');
       if (apiUrl && !apiUrl.startsWith('http')) {
@@ -78,9 +83,10 @@ function Leaderboard({ onBack }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Dev-Wallet': walletAddress
         },
         body: JSON.stringify({
-          pool_id: 'daily',
+          pool_id: selectedPayoutPool,
           num_winners: 10
         }),
       });
@@ -103,6 +109,30 @@ function Leaderboard({ onBack }) {
     <div className="leaderboard-wrapper">
       <button className="back-btn" onClick={onBack}>← Back</button>
       <h2 className="section-title">🏆 Leaderboard</h2>
+
+      {isAdmin && (
+        <div className="admin-payout-panel">
+          <h3>Admin Payout Control</h3>
+          <div className="payout-controls">
+            <select 
+              value={selectedPayoutPool} 
+              onChange={(e) => setSelectedPayoutPool(e.target.value)}
+              className="payout-select"
+            >
+              {Object.entries(pools).map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+            <button 
+              className="payout-btn"
+              onClick={handlePayout}
+            >
+              💸 Payout Selected Pool
+            </button>
+          </div>
+          {payoutStatus && <div className="payout-status">{payoutStatus}</div>}
+        </div>
+      )}
       
       {loading ? (
         <div className="loading">Loading...</div>

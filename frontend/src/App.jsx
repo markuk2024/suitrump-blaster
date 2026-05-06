@@ -130,7 +130,10 @@ function App() {
         )}
 
         {currentView === 'leaderboard' && (
-          <Leaderboard onBack={() => setCurrentView('home')} />
+          <Leaderboard 
+            walletAddress={walletAddress}
+            onBack={() => setCurrentView('home')} 
+          />
         )}
 
         {currentView === 'whitepaper' && (

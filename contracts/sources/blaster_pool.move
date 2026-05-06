@@ -138,12 +138,16 @@ module blaster::pool {
             i = i + 1;
         };
         
-        pool.is_active = false;
     }
 
     /// Mark pool as completed
     public entry fun close_pool(pool: &mut Pool) {
         pool.is_active = false;
+    }
+
+    /// Reopen a pool for the next cycle
+    public entry fun reopen_pool(pool: &mut Pool) {
+        pool.is_active = true;
     }
 
     /// Get pool information (unchanged signature for upgrade compat)

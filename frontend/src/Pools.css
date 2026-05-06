@@ -37,6 +37,29 @@
   letter-spacing: 0.5px;
 }
 
+.pool-payouts {
+  margin: 10px 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.pool-payouts p {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: #b2f5ea;
+}
+
+.pool-payouts ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.pool-payouts li {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .enter-btn {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
