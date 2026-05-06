@@ -609,7 +609,7 @@ async def auto_distribute_task():
                     
                     # Call the distribution logic (bypass auth for internal automation)
                     try:
-                        result = await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10), x_dev_wallet=config.DEV_WALLET_ADDRESS)
+                        result = await perform_reward_distribution(PayoutRequest(pool_id=pool_id, num_winners=10))
                     except Exception as dist_err:
                         print(f"AUTOMATION: Distribution failed for {pool_id}: {dist_err}")
                         continue
@@ -985,14 +985,18 @@ async def reset_data():
 
 @app.post("/distribute-rewards")
 async def distribute_rewards(data: PayoutRequest, x_dev_wallet: str = Depends(dev_wallet_auth)):
-    """Distribute rewards to winners of a pool"""
+    """Distribute rewards to winners of a pool (API Endpoint)"""
+    return await perform_reward_distribution(data)
+
+async def perform_reward_distribution(data: PayoutRequest):
+    """Internal logic to distribute rewards to winners of a pool"""
     try:
         global global_leaderboard
         if data.pool_id not in pool_leaderboards:
-            raise HTTPException(status_code=404, detail="Pool not found")
+            return {"status": "error", "message": "Pool not found in leaderboards"}
         
         if data.pool_id not in pool_data:
-            raise HTTPException(status_code=404, detail="Pool not found")
+            return {"status": "error", "message": "Pool not found in metadata"}
         
         leaderboard = pool_leaderboards[data.pool_id][:data.num_winners]
         
@@ -1123,7 +1127,8 @@ async def distribute_rewards(data: PayoutRequest, x_dev_wallet: str = Depends(de
                 "message": "Failed to call smart contract"
             }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Distribution internal error: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/pool/{pool_id}")
 def get_pool(pool_id: str):
