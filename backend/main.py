@@ -632,8 +632,8 @@ async def auto_distribute_task():
                     save_data()
                     print(f"AUTOMATION: Pool {pool_id} reset for new period.")
             
-            # Check every hour
-            await asyncio.sleep(3600)
+            # Check every 30 seconds for faster response to pool expiration
+            await asyncio.sleep(30)
             
         except Exception as e:
             print(f"AUTOMATION ERROR: {e}")
