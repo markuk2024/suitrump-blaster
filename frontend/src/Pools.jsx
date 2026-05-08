@@ -129,7 +129,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
         target: `${packageId}::pool::deposit_and_join`,
         arguments: [
           txb.object(poolObjectId),
-          txb.object(feeCoin),
+          feeCoin,
           txb.pure.address(walletAddress)
         ]
       });
