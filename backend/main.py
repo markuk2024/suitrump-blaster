@@ -29,7 +29,7 @@ except ImportError as e:
     HAS_PYSUI = False
 
 
-app = FastAPI(title="Sui Blaster Backend")
+app = FastAPI(title="SuiTrump Blaster Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -282,8 +282,8 @@ def save_data():
 global_leaderboard = []
 pool_leaderboards = defaultdict(list)  # pool_id -> list of scores
 DEFAULT_POOL_SETTINGS = {
-    "daily": {"name": "Daily Pool", "duration": "24h", "entry_fee": "0.1 SUI"},
-    "weekly": {"name": "Weekly Pool", "duration": "7d", "entry_fee": "0.5 SUI"},
+    "daily": {"name": "Daily Pool", "duration": "24h", "entry_fee": "5 SUI"},
+    "weekly": {"name": "Weekly Pool", "duration": "7d", "entry_fee": "2.5 SUI"},
     "monthly": {"name": "Monthly Pool", "duration": "28d", "entry_fee": "1 SUI"}
 }
 
@@ -555,7 +555,7 @@ async def call_smart_contract(function: str, args: list):
 
 @app.get("/")
 def root():
-    return {"status": "Sui Blaster Backend Running"}
+    return {"status": "SuiTrump Blaster Backend Running"}
 
 import asyncio
 
@@ -750,7 +750,7 @@ async def get_pools():
             current_prize = 0.0
         
         pool_copy["current_prize"] = f"{current_prize:.2f} SUI"
-        pool_copy["prize"] = f"{current_prize:.2f} SUI (Dynamic)"
+        pool_copy["prize"] = f"{current_prize:.2f} SUITRUMP (Dynamic)"  # Display as SUITRUMP for player rewards
         pool_copy["payout_structure"] = POOL_PAYOUTS.get(pool["id"], [])
 
         # Add countdown metadata
@@ -1059,11 +1059,14 @@ async def perform_reward_distribution(data: PayoutRequest):
             entry = leaderboard[i]
             reward_mist = int(prize_after_fee_mist * (reward_percentages[i] / 100))
             reward_sui = reward_mist / 1_000_000_000
+            # Convert SUI amount to SUITRUMP for display (1:1 conversion for now)
+            reward_suitrump = reward_sui  # TODO: Implement actual conversion rate
             payouts.append({
                 "rank": i + 1,
                 "wallet": entry["wallet"],
                 "score": entry["score"],
-                "reward": f"{reward_sui:.3f} SUI"
+                "reward": f"{reward_suitrump:.3f} SUITRUMP",
+                "reward_sui_mist": reward_mist  # Keep track of SUI amount for contract call
             })
             winners.append((entry["wallet"], reward_mist))
         
@@ -1114,11 +1117,11 @@ async def perform_reward_distribution(data: PayoutRequest):
                 "pool_id": data.pool_id,
                 "total_prize": f"{(prize_amount_mist/1e9):.3f} SUI",
                 "dev_fee": f"{(dev_fee_mist/1e9):.3f} SUI ({config.DEV_FEE_PERCENTAGE}%)",
-                "prize_after_fee": f"{(prize_after_fee_mist/1e9):.3f} SUI",
+                "prize_after_fee": f"{(prize_after_fee_mist/1e9):.3f} SUITRUMP",
                 "num_winners": len(payouts),
                 "payouts": payouts,
                 "contract_transaction": contract_result["transaction_id"],
-                "message": "Rewards distributed via smart contract"
+                "message": "Rewards distributed via smart contract (Dev fees in SUI, Player rewards in SUITRUMP)"
             }
         else:
             return {

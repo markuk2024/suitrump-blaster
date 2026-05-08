@@ -50,7 +50,7 @@ function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1 className="title">🚀 Sui Blaster v2</h1>
+        <h1 className="title">🚀 SuiTrump Blaster v2</h1>
         <button 
           className="wallet-btn"
           onClick={currentAccount ? null : handleConnectWallet}
@@ -101,7 +101,8 @@ function App() {
                 <li>Join a competition pool by paying SUI</li>
                 <li>Control your ship with touch controls</li>
                 <li>Shoot enemies to score points</li>
-                <li>Top players win prize pool rewards</li>
+                <li>Top players win SUITRUMP token rewards</li>
+                <li>Dev fees (2.5%) are paid in SUI</li>
               </ul>
             </div>
           </div>

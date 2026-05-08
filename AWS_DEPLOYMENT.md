@@ -1,6 +1,6 @@
-# AWS Deployment Guide for Sui Blaster
+# AWS Deployment Guide for SuiTrump Blaster
 
-This guide will help you deploy Sui Blaster to AWS using App Runner (backend) and Amplify (frontend).
+This guide will help you deploy SuiTrump Blaster to AWS using App Runner (backend) and Amplify (frontend).
 
 ## Prerequisites
 
@@ -41,7 +41,7 @@ This guide will help you deploy Sui Blaster to AWS using App Runner (backend) an
    ```
 
 6. **Service settings:**
-   - Service name: `sui-blaster-backend`
+   - Service name: `suitrump-blaster-backend`
    - CPU: 1 vCPU
    - Memory: 2 GB (or 1 GB for free tier if available)
    - Auto scaling: Enable (minimum 1, maximum 2)
@@ -57,13 +57,13 @@ If you prefer using the Dockerfile:
 
 1. Push your code to GitHub
 2. Go to AWS Console → Elastic Container Registry (ECR)
-3. Create a repository named `sui-blaster-backend`
+3. Create a repository named `suitrump-blaster-backend`
 4. Follow the push commands shown in ECR:
    ```bash
    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
-   docker build -t sui-blaster-backend .
-   docker tag sui-blaster-backend:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/sui-blaster-backend:latest
-   docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/sui-blaster-backend:latest
+   docker build -t suitrump-blaster-backend .
+   docker tag suitrump-blaster-backend:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/suitrump-blaster-backend:latest
+   docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/suitrump-blaster-backend:latest
    ```
 
 5. Then create App Runner service using the ECR image
@@ -80,7 +80,7 @@ If you prefer using the Dockerfile:
    - Select your repository and branch (main)
 
 4. **Build settings:**
-   - App name: `sui-blaster-frontend`
+   - App name: `suitrump-blaster-frontend`
    - Build and test settings:
      - Build command: `npm run build`
      - Output directory: `dist`
@@ -102,7 +102,7 @@ If you prefer using the Dockerfile:
 
 1. In Amplify console, go to "Domain management"
 2. Click "Add domain"
-3. Enter your domain name (e.g., `suiblaster.yourdomain.com`)
+3. Enter your domain name (e.g., `suitrumpblaster.yourdomain.com`)
 4. Follow the DNS setup instructions
 
 ## Step 3: Test the Deployment
@@ -132,7 +132,7 @@ The current implementation uses file-based storage (`data.json`). This is **not 
 
 #### Option 1: AWS S3 (Recommended)
 
-1. Create an S3 bucket named `sui-blaster-data`
+1. Create an S3 bucket named `suitrump-blaster-data`
 2. Update the backend to use S3 instead of local file
 
 Install boto3:
@@ -146,7 +146,7 @@ import boto3
 from botocore.exceptions import NoCredentialsError
 
 s3 = boto3.client('s3')
-BUCKET_NAME = 'sui-blaster-data'
+BUCKET_NAME = 'suitrump-blaster-data'
 
 def save_data():
     try:
@@ -180,7 +180,7 @@ Add IAM permissions to App Runner service to access S3.
 
 #### Option 2: AWS DynamoDB (Better for structured data)
 
-1. Create a DynamoDB table named `SuiBlasterData`
+1. Create a DynamoDB table named `SuiTrumpBlasterData`
 2. Use AWS SDK to store/retrieve data
 
 #### Option 3: AWS RDS (PostgreSQL)

@@ -24,7 +24,12 @@ class Config:
     POOL_ENTRY_FEE: int = 100_000_000  # 0.1 SUI in MIST
     ADMIN_PRIVATE_KEY: str = _get_env("ADMIN_PRIVATE_KEY", "PRIVATE_KEY", "SUI_PRIVATE_KEY", default="")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
-    S3_DATA_KEY: str = os.getenv("S3_DATA_KEY", "sui-blaster/data.json")
+    S3_DATA_KEY: str = os.getenv("S3_DATA_KEY", "suitrump-blaster/data.json")
+    
+    # SUITRUMP Token Configuration
+    SUITRUMP_TOKEN_PACKAGE: str = os.getenv("SUITRUMP_TOKEN_PACKAGE", "0x0")
+    SUITRUMP_TOKEN_MODULE: str = os.getenv("SUITRUMP_TOKEN_MODULE", "suitrump")
+    SUITRUMP_TOKEN_NAME: str = os.getenv("SUITRUMP_TOKEN_NAME", "SUITRUMP")
     
     # Real On-chain Pool Object IDs
     DAILY_POOL_ID: str = os.getenv("DAILY_POOL_ID", "0x0")

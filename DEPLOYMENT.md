@@ -1,6 +1,6 @@
-# Sui Blaster Deployment Guide
+# Suiter Deployment Guide
 
-This guide will help you deploy Sui Blaster so other users can play it.
+This guide will help you deploy Suiter so other users can play it.
 
 ## Prerequisites
 
@@ -32,7 +32,7 @@ This guide will help you deploy Sui Blaster so other users can play it.
      POOL_ENTRY_FEE=100000000
      ```
    - Click Deploy Web Service
-   - Copy the deployed URL (e.g., `https://sui-blaster-backend.onrender.com`)
+   - Copy the deployed URL (e.g., `https://suitrump-blaster-backend.onrender.com`)
 
 #### Frontend Deployment (Vercel)
 
@@ -88,7 +88,7 @@ ssh user@your-server
 
 # Clone the repository
 git clone <your-repo-url>
-cd sui-blaster/backend
+cd suitrump-blaster/backend
 
 # Install dependencies
 pip install -r requirements.txt
@@ -97,18 +97,18 @@ pip install -r requirements.txt
 sudo apt install nginx supervisor
 
 # Create a systemd service
-sudo nano /etc/systemd/system/sui-blaster.service
+sudo nano /etc/systemd/system/suitrump-blaster.service
 ```
 
 Add this content:
 ```
 [Unit]
-Description=Sui Blaster Backend
+Description=SuiTrump Blaster Backend
 After=network.target
 
 [Service]
 User=your-user
-WorkingDirectory=/path/to/sui-blaster/backend
+WorkingDirectory=/path/to/suitrump-blaster/backend
 ExecStart=/usr/local/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=always
 
@@ -118,11 +118,11 @@ WantedBy=multi-user.target
 
 ```bash
 # Start the service
-sudo systemctl start sui-blaster
-sudo systemctl enable sui-blaster
+sudo systemctl start suitrump-blaster
+sudo systemctl enable suitrump-blaster
 
 # Configure nginx
-sudo nano /etc/nginx/sites-available/sui-blaster
+sudo nano /etc/nginx/sites-available/suitrump-blaster
 ```
 
 Add this content:
@@ -141,7 +141,7 @@ server {
 
 ```bash
 # Enable the site
-sudo ln -s /etc/nginx/sites-available/sui-blaster /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/suitrump-blaster /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```

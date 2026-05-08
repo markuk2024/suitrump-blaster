@@ -1,4 +1,4 @@
-# Sui Blaster - Web3 Space Shooter Game
+# SuiTrump Blaster - Web3 Space Shooter Game
 
 A mobile-only Web3 space shooter game on the Sui blockchain with competitive leaderboards and prize pools.
 
@@ -9,11 +9,12 @@ A mobile-only Web3 space shooter game on the Sui blockchain with competitive lea
 - **Escrow System**: Secure fund locking and automatic reward distribution
 - **Anti-Cheat**: Backend score validation before blockchain submission
 - **Sui Integration**: Pay-to-play with SUI tokens, on-chain leaderboards
+- **SUITRUMP Rewards**: Player payouts in SUITRUMP token, dev fees in SUI
 
 ## Architecture
 
 ```
-sui-blaster/
+suitrump-blaster/
 ├── contracts/          # Move smart contracts
 ├── backend/            # Python FastAPI server
 ├── frontend/           # React + Phaser game
@@ -49,7 +50,7 @@ Edit `backend/config.py` with your:
 - Sui network RPC URL
 - Admin wallet private key
 - Contract package ID
-- (Optional) Persistent storage path via `DATA_FILE`. On Render, attach a disk and set `DATA_FILE=/var/data/sui-blaster/data.json` (or similar) so leaderboards and escrow mirrors survive redeploys.
+- (Optional) Persistent storage path via `DATA_FILE`. On Render, attach a disk and set `DATA_FILE=/var/data/suitrump-blaster/data.json` (or similar) so leaderboards and escrow mirrors survive redeploys.
 
 ### 4. Run Backend
 
@@ -72,19 +73,19 @@ Open http://localhost:3000 on your mobile device
 ## Game Flow
 
 1. **Connect Wallet**: Connect your Sui wallet
-2. **Enter Pool**: Pay entry fee (e.g., 0.1 SUI) to join a competition
+2. **Enter Pool**: Pay entry fee (Daily: 5 SUI, Weekly: 2.5 SUI, 28-day: 1 SUI) to join a competition
 3. **Play Game**: Control your ship, shoot enemies, score points
 4. **Score Validation**: Backend validates gameplay data
 5. **Leaderboard**: Score submitted to on-chain leaderboard
-6. **Claim Rewards**: After competition ends, top players claim rewards
+6. **Claim Rewards**: After competition ends, top players claim SUITRUMP rewards (dev fees paid in SUI)
 
 ## Reward Distribution
 
-- Before rewards go out, **2.5%** (configurable) is skimmed off the prize pool as a dev fee and sent to the dev wallet. So, for example, a 0.20SUI daily pool pays out 0.195SUI to winners after the fee.
-- 1st Place: 40%
-- 2nd Place: 25%
-- 3rd Place: 15%
-- 4th-10th Place: 20% split (2.86% each)
+- Before rewards go out, **2.5%** (configurable) is skimmed off the prize pool as a dev fee and sent to the dev wallet in SUI.
+- Player rewards are distributed in SUITRUMP token.
+- Daily Pool: Top 3 players (50%, 30%, 20%)
+- Weekly Pool: Top 4 players (40%, 25%, 20%, 15%)
+- 28-Day Pool: Top 4 players (45%, 25%, 20%, 10%)
 
 ## Anti-Cheat Measures
 

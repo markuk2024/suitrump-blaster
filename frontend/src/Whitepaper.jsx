@@ -6,14 +6,14 @@ function Whitepaper({ onBack }) {
     <div className="whitepaper-container">
       <button className="back-btn" onClick={onBack}>← Back</button>
       <div className="whitepaper-content">
-        <h1>🛰️ Sui Blaster v2 - Whitepaper</h1>
+        <h1>🛰️ SuiTrump Blaster v2 - Whitepaper</h1>
         <p className="subtitle">Official Rules, Payout Structure, and Tokenomics</p>
 
         <section>
           <h2>1. Introduction</h2>
           <p>
-            Sui Blaster v2 is a fast-paced, survival space shooter built on the Sui Blockchain. 
-            Players compete in time-limited pools to achieve the highest scores and win SUI rewards from collective prize pools.
+            SuiTrump Blaster v2 is a fast-paced, survival space shooter built on the Sui Blockchain. 
+            Players compete in time-limited pools to achieve the highest scores and win SUITRUMP rewards from collective prize pools.
           </p>
         </section>
 
@@ -57,7 +57,7 @@ function Whitepaper({ onBack }) {
             <h3>🛠️ Developer Fee</h3>
             <p>
               A <strong>2.5% Developer Fee</strong> is deducted from the total prize pool before any rewards are distributed. 
-              This fee is used to cover server costs, RPC maintenance, and the continued development of the Sui Blaster ecosystem.
+              This fee is used to cover server costs, RPC maintenance, and the continued development of the SuiTrump Blaster ecosystem.
             </p>
           </div>
           <p>
@@ -68,7 +68,7 @@ function Whitepaper({ onBack }) {
         <section>
           <h2>5. Anti-Cheat & Fair Play</h2>
           <p>
-            To ensure a fair environment for all players, Sui Blaster employs several security measures:
+            To ensure a fair environment for all players, SuiTrump Blaster employs several security measures:
           </p>
           <ul>
             <li><strong>Transaction Verification:</strong> Every entry is verified on the Sui blockchain before score submission is allowed.</li>
@@ -80,14 +80,14 @@ function Whitepaper({ onBack }) {
         <section>
           <h2>6. Disclaimer & Risks</h2>
           <p>
-            Sui Blaster v2 is a decentralized application built on the Sui Network. 
+            SuiTrump Blaster v2 is a decentralized application built on the Sui Network. 
             Cryptocurrency investments carry inherent risks. Please only play with SUI you can afford to lose. 
             The developers are not responsible for network congestion or wallet-side technical issues.
           </p>
         </section>
 
         <footer>
-          <p>&copy; 2024 Sui Blaster v2. Built on Sui Mainnet.</p>
+          <p>&copy; 2024 SuiTrump Blaster v2. Built on Sui Mainnet.</p>
         </footer>
       </div>
     </div>

@@ -195,7 +195,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       <button className="back-btn" onClick={onBack}>← Back</button>
       <h2 className="pools-title">Competition Pools v2</h2>
       <p className="dev-fee-note">
-        Note: A {DEV_FEE_PERCENT}% dev fee is deducted from every pool before rewards are distributed.
+        Note: A {DEV_FEE_PERCENT}% dev fee (paid in SUI) is deducted from every pool before SUITRUMP rewards are distributed.
       </p>
       <div className="pools-grid">
         {poolsWithCountdown.map(pool => (
@@ -229,7 +229,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
                 const netPrize = prizeValue * ((100 - DEV_FEE_PERCENT) / 100);
                 return (
                   <p className="dev-fee-inline">
-                    After dev fee ({DEV_FEE_PERCENT}%): {netPrize.toFixed(3)} SUI
+                    After dev fee ({DEV_FEE_PERCENT}%): {netPrize.toFixed(3)} SUITRUMP
                   </p>
                 );
               })()}
