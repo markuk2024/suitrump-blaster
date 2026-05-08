@@ -128,8 +128,8 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       txb.moveCall({
         target: `${packageId}::pool::deposit_and_join`,
         arguments: [
-          txb.object(poolObjectId),
-          txb.object(feeCoin),
+          txb.pure.id(poolObjectId),
+          feeCoin,
           txb.pure.address(walletAddress)
         ]
       });
