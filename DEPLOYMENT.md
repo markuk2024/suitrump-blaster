@@ -26,7 +26,7 @@ This guide will help you deploy Suiter so other users can play it.
      SUI_NETWORK=https://fullnode.mainnet.sui.io
      PACKAGE_ID=0x529e9c233a7f2f6cc5bcd8371735cba8e44d80a1d30c8bd0a29ea4b4be4d4b54
      DEV_FEE_PERCENTAGE=2.5
-     DEV_WALLET_ADDRESS=0x4c2891f70f1317fed1198140e0f06f49593c82558b2b467e1717c23fee9131a6
+     DEV_WALLET_ADDRESS=0x0d32cdae7aa9a25003687dcbfe154c5d13bc51b76fd29116a54276c1f80fd140
      MAX_SCORE_PER_SECOND=100
      MAX_GAME_DURATION=300
      POOL_ENTRY_FEE=100000000

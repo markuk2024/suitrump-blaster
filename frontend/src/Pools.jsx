@@ -117,7 +117,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
       apiUrl = apiUrl.replace(/\/$/, '');
       const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x0";
-      const devWallet = import.meta.env.VITE_DEV_WALLET || "0x4c2891f70f1317fed1198140e0f06f49593c82558b2b467e1717c23fee9131a6";
+      const devWallet = import.meta.env.VITE_DEV_WALLET || "0x0d32cdae7aa9a25003687dcbfe154c5d13bc51b76fd29116a54276c1f80fd140";
 
       const txb = new Transaction();
       
