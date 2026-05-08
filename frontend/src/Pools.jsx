@@ -120,7 +120,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       const devWallet = import.meta.env.VITE_DEV_WALLET || "0x0d32cdae7aa9a25003687dcbfe154c5d13bc51b76fd29116a54276c1f80fd140";
 
       const txb = new Transaction();
-      
+
       // 1. Split the entry fee from gas
       const [feeCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(entryFeeMist)]);
 
@@ -129,7 +129,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
         target: `${packageId}::pool::deposit_and_join`,
         arguments: [
           txb.object(poolObjectId),
-          feeCoin,
+          txb.object(feeCoin),
           txb.pure.address(walletAddress)
         ]
       });
