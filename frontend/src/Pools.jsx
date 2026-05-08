@@ -127,9 +127,10 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       // 2. Deposit fee into pool escrow AND register player in one call
       txb.moveCall({
         target: `${packageId}::pool::deposit_and_join`,
+        typeArguments: [],
         arguments: [
-          txb.pure.id(poolObjectId),
-          feeCoin,
+          txb.object(poolObjectId),
+          txb.object(feeCoin),
           txb.pure.address(walletAddress)
         ]
       });
