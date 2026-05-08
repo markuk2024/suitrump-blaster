@@ -24,7 +24,7 @@ This guide will help you deploy Suiter so other users can play it.
    - Add environment variables:
      ```
      SUI_NETWORK=https://fullnode.mainnet.sui.io
-     PACKAGE_ID=0x529e9c233a7f2f6cc5bcd8371735cba8e44d80a1d30c8bd0a29ea4b4be4d4b54
+     PACKAGE_ID=0x45f3505dd139ff3f68525a9bba495ae4b9cb4309c052612f288992aff6968920
      DEV_FEE_PERCENTAGE=2.5
      DEV_WALLET_ADDRESS=0x0d32cdae7aa9a25003687dcbfe154c5d13bc51b76fd29116a54276c1f80fd140
      MAX_SCORE_PER_SECOND=100
@@ -46,7 +46,7 @@ This guide will help you deploy Suiter so other users can play it.
    - Add environment variable:
      ```
      VITE_API_URL=https://your-backend-url.onrender.com
-     VITE_SUI_PACKAGE_ID=0x529e9c233a7f2f6cc5bcd8371735cba8e44d80a1d30c8bd0a29ea4b4be4d4b54
+     VITE_SUI_PACKAGE_ID=0x45f3505dd139ff3f68525a9bba495ae4b9cb4309c052612f288992aff6968920
      ```
    - Click Deploy
    - Copy the deployed frontend URL

@@ -32,7 +32,7 @@ This guide will help you deploy SuiTrump Blaster to AWS using App Runner (backen
    Click "Add variable" and add:
    ```
    SUI_NETWORK=https://fullnode.mainnet.sui.io
-   PACKAGE_ID=0x529e9c233a7f2f6cc5bcd8371735cba8e44d80a1d30c8bd0a29ea4b4be4d4b54
+   PACKAGE_ID=0x45f3505dd139ff3f68525a9bba495ae4b9cb4309c052612f288992aff6968920
    DEV_FEE_PERCENTAGE=2.5
    DEV_WALLET_ADDRESS=0x0d32cdae7aa9a25003687dcbfe154c5d13bc51b76fd29116a54276c1f80fd140
    MAX_SCORE_PER_SECOND=100
@@ -90,7 +90,7 @@ If you prefer using the Dockerfile:
    Click "Add variable" and add:
    ```
    VITE_API_URL=https://your-backend-url.us-east-1.awsapprunner.com
-   VITE_SUI_PACKAGE_ID=0x529e9c233a7f2f6cc5bcd8371735cba8e44d80a1d30c8bd0a29ea4b4be4d4b54
+   VITE_SUI_PACKAGE_ID=0x45f3505dd139ff3f68525a9bba495ae4b9cb4309c052612f288992aff6968920
    ```
 
 6. Click "Next" → "Save and deploy"
