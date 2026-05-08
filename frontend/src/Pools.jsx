@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import './Pools.css';
 
 const DEV_FEE_PERCENT = 2.5;
@@ -119,7 +119,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x0";
       const devWallet = import.meta.env.VITE_DEV_WALLET || "0x0d32cdae7aa9a25003687dcbfe154c5d13bc51b76fd29116a54276c1f80fd140";
 
-      const txb = new TransactionBlock();
+      const txb = new Transaction();
 
       // 1. Split the entry fee from gas
       const [feeCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(entryFeeMist)]);
@@ -128,7 +128,7 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       txb.moveCall({
         target: `${packageId}::pool::deposit_and_join`,
         arguments: [
-          txb.object(poolObjectId),
+          txb.pure.id(poolObjectId),
           feeCoin,
           txb.pure.address(walletAddress)
         ]
