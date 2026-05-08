@@ -32,8 +32,8 @@ class Config:
     SUITRUMP_TOKEN_NAME: str = os.getenv("SUITRUMP_TOKEN_NAME", "SUITRUMP")
     
     # Real On-chain Pool Object IDs
-    DAILY_POOL_ID: str = os.getenv("DAILY_POOL_ID", "0x0")
-    WEEKLY_POOL_ID: str = os.getenv("WEEKLY_POOL_ID", "0x0")
-    MONTHLY_POOL_ID: str = os.getenv("MONTHLY_POOL_ID", "0x0")
+    DAILY_POOL_ID: str = os.getenv("DAILY_POOL_ID", "0x478672bbf8512f9403d029df4adb5e1e386bd9d23ff318e14f47136035df5597")
+    WEEKLY_POOL_ID: str = os.getenv("WEEKLY_POOL_ID", "0x73704b5dcf1fba6c7cfec523bff2e8d3b6f6e4ae24a4d87a14bc75e72d21417d")
+    MONTHLY_POOL_ID: str = os.getenv("MONTHLY_POOL_ID", "0xc110d1a5896b78230dfc1e6a9951f1e74dc93a1790483be33cb248209c2701e9")
 
 config = Config()
