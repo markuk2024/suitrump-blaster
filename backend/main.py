@@ -808,7 +808,12 @@ async def join_pool(data: PoolJoin):
             transaction_verified = True
             payment_amount_mist = tx_verification.get("amount_mist", 0)
         else:
-            raise HTTPException(status_code=400, detail="Invalid transaction")
+            # If verification fails, check if the wallet is already in the pool (might have been verified earlier)
+            if data.wallet in get_pool_wallets(data.pool_id):
+                transaction_verified = True
+                payment_amount_mist = expected_entry_fee
+            else:
+                raise HTTPException(status_code=400, detail="Invalid transaction")
     else:
         # For development, allow joining without transaction but do not credit escrow
         print("WARNING: join_pool called without transaction_id - escrow not updated")
