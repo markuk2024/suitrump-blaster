@@ -76,7 +76,7 @@ class PayoutRequest(BaseModel):
     num_winners: int = 10  # Number of top players to pay out
 
 # Data persistence
-DATA_FILE = os.getenv("DATA_FILE", os.path.join(os.getcwd(), "data.json"))
+DATA_FILE = os.getenv("DATA_FILE", "/var/data/data.json")
 
 
 def _get_duration_override(env_name: str, default_seconds: int) -> int:
