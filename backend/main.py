@@ -828,6 +828,11 @@ async def get_pools():
         pool_copy["players"] = len(pool_participants.get(pool["id"], []))
         participants_list = pool_participants.get(pool["id"], [])
 
+        # Convert entry fee from mist to SUI for display
+        entry_fee_mist = pool_copy.get("entry_fee", 0)
+        entry_fee_sui = entry_fee_mist / 1_000_000_000
+        pool_copy["entry_fee"] = f"{entry_fee_sui:.1f} SUI"
+
         contract_id = pool_copy.get("contract_id")
         onchain_balance = await fetch_pool_balance_onchain(contract_id) if contract_id else None
         if onchain_balance is not None and onchain_balance != raw_mist:
