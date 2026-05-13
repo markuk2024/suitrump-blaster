@@ -118,8 +118,11 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       console.log('Entry fee raw:', pool.entry_fee, 'parsed:', entryFeeNumeric, 'mist:', entryFeeMist);
       let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
       apiUrl = apiUrl.replace(/\/$/, '');
-      const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x0";
+      const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x175918d5654f0eaf645412ce72399bef2c2508e95f01bd81bf27c880b839e1b8";
       const devWallet = import.meta.env.VITE_DEV_WALLET || "0x0d32cdae7aa9a25003687dcbfe154c5d13bc51b76fd29116a54276c1f80fd140";
+      
+      console.log('Using package ID:', packageId);
+      console.log('Pool object ID:', poolObjectId);
 
       const txb = new Transaction();
 
