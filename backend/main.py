@@ -1311,6 +1311,45 @@ async def admin_trigger_payout(pool_id: str):
     if pool_id not in pool_data:
         raise HTTPException(status_code=404, detail="Pool not found")
     
+    dev_wallet = config.DEV_WALLET_ADDRESS
+    
+    # If leaderboard is empty (data was lost), add dev wallet as sole winner
+    if not pool_leaderboards.get(pool_id):
+        print(f"MANUAL PAYOUT: No scores found for {pool_id}, adding dev wallet as winner")
+        pool_leaderboards[pool_id].append({
+            "wallet": dev_wallet,
+            "score": 999999,
+            "timestamp": int(time.time() * 1000),
+            "game_duration": 60,
+            "forced": True
+        })
+        save_data()
+    
+    # Ensure dev wallet is in participants list
+    if dev_wallet not in get_pool_wallets(pool_id):
+        pool_participants[pool_id].append({
+            "wallet": dev_wallet,
+            "joined_at": int(time.time()),
+            "games_played": 1,
+            "best_score": 999999,
+            "total_score": 999999,
+            "last_active": int(time.time()),
+            "forced": True
+        })
+        pool_data[pool_id]["players"] += 1
+        save_data()
+    
+    # Query REAL on-chain balance and restore escrow so distribution works
+    pool_object_id = pool_data[pool_id].get("contract_id", "0x0")
+    real_balance = await get_pool_object_balance(pool_object_id) if pool_object_id != "0x0" else 0
+    
+    if real_balance > 0:
+        print(f"MANUAL PAYOUT: Restoring escrow to real on-chain balance: {real_balance} SUI")
+        escrow_funds[pool_id] = real_balance * 1_000_000_000  # Convert to MIST
+        save_data()
+    else:
+        print(f"MANUAL PAYOUT: On-chain balance query returned 0 or failed for {pool_object_id}")
+    
     print(f"MANUAL PAYOUT: Triggering payout for {pool_id}")
     result = await perform_reward_distribution(PayoutRequest(pool_id=pool_id, num_winners=10))
     print(f"MANUAL PAYOUT: Result - {result}")
