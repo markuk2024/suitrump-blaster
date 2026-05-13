@@ -76,7 +76,7 @@ class PayoutRequest(BaseModel):
     num_winners: int = 10  # Number of top players to pay out
 
 # Data persistence
-DATA_FILE = os.getenv("DATA_FILE", "/var/data/data.json")
+DATA_FILE = os.getenv("DATA_FILE", "/var/data/sui/data.json")
 
 # Try to use Render Disk, fall back to local if not available
 if not os.path.exists(os.path.dirname(DATA_FILE)):
