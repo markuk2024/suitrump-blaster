@@ -188,7 +188,7 @@ def prune_global_leaderboard_entries() -> bool:
 
 def load_data():
     """Load data from local JSON file"""
-    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, pool_start_times, active_games, pool_history
+    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, pool_start_times, active_games, pool_history, POOL_DURATIONS
     
     try:
         _ensure_data_dir()
@@ -242,12 +242,13 @@ def load_data():
         
         # Load pool start times or initialize them
         loaded_start_times = data.get("pool_start_times", {})
-        now = int(time.time())
-        pool_start_times = {
-            "daily": loaded_start_times.get("daily", now),
-            "weekly": loaded_start_times.get("weekly", now),
-            "monthly": loaded_start_times.get("monthly", now)
-        }
+        pool_start_times = {}
+        for pool_id in POOL_DURATIONS.keys():
+            if pool_id in loaded_start_times:
+                pool_start_times[pool_id] = loaded_start_times[pool_id]
+            else:
+                pool_start_times[pool_id] = int(time.time())
+                print(f"Initialized {pool_id} pool start time to current time")
 
         # Clean up stale leaderboard entries that reference cleared pools
         if prune_global_leaderboard_entries():
@@ -560,14 +561,11 @@ def root():
 import asyncio
 
 # Add pool start times to track expiration
-pool_start_times = {
-    "daily": int(time.time()),
-    "weekly": int(time.time()),
-    "monthly": int(time.time())
-}
+pool_start_times = {}
 
 async def auto_distribute_task():
     """Background task to automatically distribute rewards when pools expire"""
+    print("AUTO_DISTRIBUTE: Background task started")
     while True:
         try:
             now = int(time.time())
@@ -575,6 +573,7 @@ async def auto_distribute_task():
             for pool_id, duration in POOL_DURATIONS.items():
                 start_time = pool_start_times.get(pool_id, now)
                 elapsed = now - start_time
+                print(f"AUTO_DISTRIBUTE: {pool_id} - elapsed: {elapsed}s, duration: {duration}s, expires in: {duration - elapsed}s")
                 if elapsed >= duration:
                     participants = pool_participants.get(pool_id, [])
                     escrow_balance = escrow_funds.get(pool_id, 0)
@@ -1301,58 +1300,16 @@ async def get_pool_object_balance(pool_object_id: str):
         print(f"Balance query error: {e}")
         return 0
 
-@app.post("/admin/force-payout", dependencies=[Depends(dev_wallet_auth)])
-async def admin_force_payout(pool_id: str):
-    """Force payout - queries real chain balance, adds dev wallet as winner, distributes"""
+@app.post("/admin/trigger-payout")
+async def admin_trigger_payout(pool_id: str):
+    """Manual trigger for payout (no auth required for testing)"""
     if pool_id not in pool_data:
         raise HTTPException(status_code=404, detail="Pool not found")
     
-    dev_wallet = config.DEV_WALLET_ADDRESS
-    
-    # If leaderboard is empty (data was lost), add dev wallet as sole winner
-    if not pool_leaderboards.get(pool_id):
-        print(f"FORCE PAYOUT: No scores found for {pool_id}, adding dev wallet as winner")
-        pool_leaderboards[pool_id].append({
-            "wallet": dev_wallet,
-            "score": 999999,
-            "timestamp": int(time.time() * 1000),
-            "game_duration": 60,
-            "forced": True
-        })
-        save_data()
-    
-    # Ensure dev wallet is in participants list
-    if dev_wallet not in get_pool_wallets(pool_id):
-        pool_participants[pool_id].append({
-            "wallet": dev_wallet,
-            "joined_at": int(time.time()),
-            "games_played": 1,
-            "best_score": 999999,
-            "total_score": 999999,
-            "last_active": int(time.time()),
-            "forced": True
-        })
-        pool_data[pool_id]["players"] += 1
-        save_data()
-    
-    # Query REAL on-chain balance and restore escrow so distribution works
-    pool_object_id = pool_data[pool_id].get("contract_id", "0x0")
-    real_balance = await get_pool_object_balance(pool_object_id) if pool_object_id != "0x0" else 0
-    
-    if real_balance > 0:
-        print(f"FORCE PAYOUT: Restoring escrow to real on-chain balance: {real_balance} SUI")
-        escrow_funds[pool_id] = real_balance
-        save_data()
-    else:
-        print(f"FORCE PAYOUT: On-chain balance query returned 0 or failed for {pool_object_id}")
-    
-    # Trigger distribution
-    result = await distribute_rewards(PayoutRequest(pool_id=pool_id, num_winners=10))
-    
-    return {
-        "status": "force_payout_triggered",
-        "pool_id": pool_id,
-        "pool_object_id": pool_object_id,
+    print(f"MANUAL PAYOUT: Triggering payout for {pool_id}")
+    result = await perform_reward_distribution(PayoutRequest(pool_id=pool_id, num_winners=10))
+    print(f"MANUAL PAYOUT: Result - {result}")
+    return result
         "real_balance_queried": real_balance,
         "result": result,
         "message": "If on-chain transaction succeeded, funds have been distributed. Check Sui Explorer for the transaction digest."
