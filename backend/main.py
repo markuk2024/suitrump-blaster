@@ -487,24 +487,12 @@ async def call_smart_contract(function: str, args: list):
         if HAS_PYSUI and admin_key and config.PACKAGE_ID and config.PACKAGE_ID != "0x0":
             print(f"Attempting REAL on-chain transaction: {function}")
             try:
-                # Use Sui RPC directly instead of pysui (more reliable)
-                import requests
-                
-                # Build transaction using Sui RPC
-                tx_payload = {
-                    "kind": "moveCall",
-                    "target": f"{config.PACKAGE_ID}::pool::distribute_rewards",
-                    "arguments": [
-                        {"kind": "object", "objectId": args[0], "objectType": "0x2::pool::Pool"},
-                        {"kind": "vector", "type": "address", "value": [w[0] for w in args[1]]},
-                        {"kind": "vector", "type": "u64", "value": [str(int(w[1])) for w in args[1]]}
-                    ]
-                }
-                
-                # Sign and execute transaction (this requires admin key)
-                # For now, return error since we can't sign without proper key management
-                print(f"Smart contract call requires proper key management - using simulation")
-                raise Exception("Smart contract signing not configured")
+                # Initialize Sui client with admin key
+                cfg = SuiConfig.user_config(
+                    rpc_url=config.SUI_NETWORK,
+                    prv_keys=[admin_key]
+                )
+                client = SyncClient(cfg)
                 
                 if function == "distribute_rewards":
                     # args: [pool_object_id, [(winner_addr, amount_mist), ...]]
@@ -518,10 +506,24 @@ async def call_smart_contract(function: str, args: list):
                     winner_addrs = SuiArray(winner_addrs_list)
                     winner_amounts = SuiArray(winner_amounts_list)
                     
-                    txer.move_call(
+                    # Build transaction using the correct pysui API
+                    tx_builder = client.get_move_call_tx_builder(
                         target=f"{config.PACKAGE_ID}::pool::distribute_rewards",
                         arguments=[ObjectID(pool_id), winner_addrs, winner_amounts]
                     )
+                    
+                    # Execute the transaction
+                    result = client.execute_tx(tx_builder)
+                    result = handle_result(result)
+                    tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                    
+                    print(f"Transaction succeeded: {tx_digest}")
+                    return {
+                        "status": "success",
+                        "function": function,
+                        "transaction_id": tx_digest,
+                        "message": "Transaction executed on-chain"
+                    }
                 else:
                     # Generic fallback - just simulate for unsupported functions
                     print(f"Function {function} not implemented for real signing, using simulation")
@@ -530,9 +532,6 @@ async def call_smart_contract(function: str, args: list):
                         "function": function,
                         "transaction_id": f"sim_{int(time.time())}"
                     }
-                
-                result = txer.execute()
-                result = handle_result(result)
                 tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
                 
                 print(f"Transaction succeeded: {tx_digest}")
