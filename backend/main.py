@@ -78,6 +78,11 @@ class PayoutRequest(BaseModel):
 # Data persistence
 DATA_FILE = os.getenv("DATA_FILE", "/var/data/data.json")
 
+# Try to use Render Disk, fall back to local if not available
+if not os.path.exists(os.path.dirname(DATA_FILE)):
+    print(f"Render Disk mount point not found, using local storage")
+    DATA_FILE = os.path.join(os.getcwd(), "data.json")
+
 
 def _get_duration_override(env_name: str, default_seconds: int) -> int:
     """Allow overriding a pool duration via environment variable (seconds)."""
@@ -1310,10 +1315,6 @@ async def admin_trigger_payout(pool_id: str):
     result = await perform_reward_distribution(PayoutRequest(pool_id=pool_id, num_winners=10))
     print(f"MANUAL PAYOUT: Result - {result}")
     return result
-        "real_balance_queried": real_balance,
-        "result": result,
-        "message": "If on-chain transaction succeeded, funds have been distributed. Check Sui Explorer for the transaction digest."
-    }
 
 @app.post("/withdraw-dev-fees", dependencies=[Depends(dev_wallet_auth)])
 async def withdraw_dev_fees(pool_id: Optional[str] = None):
