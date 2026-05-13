@@ -1,7 +1,7 @@
 #[allow(duplicate_alias)]
 module blaster::pool {
     use sui::transfer;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{TxContext, tx_context};
     use sui::object;
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
@@ -253,5 +253,26 @@ module blaster::pool {
             };
         };
         pool.is_active = false;
+    }
+
+    /// NEW: Withdraw SUI from escrow for external swapping
+    /// Only callable by dev wallet
+    public entry fun withdraw_from_escrow(pool: &mut Pool, amount: u64, ctx: &mut TxContext) {
+        assert!(tx_context::signer(ctx) == pool.dev_wallet, EInvalidFee);
+        
+        if (!dynamic_field::exists_with_type<EscrowKey, Balance<SUI>>(&pool.id, EscrowKey {})) {
+            dynamic_field::add(&mut pool.id, EscrowKey {}, balance::zero<SUI>());
+        };
+        
+        let escrow: &mut Balance<SUI> = dynamic_field::borrow_mut(&mut pool.id, EscrowKey {});
+        let available = balance::value(escrow);
+        
+        assert!(amount > 0 && amount <= available, ENoFunds);
+        
+        let withdrawal = coin::take(escrow, amount, ctx);
+        transfer::public_transfer(withdrawal, pool.dev_wallet);
+        
+        // Update legacy balance field
+        pool.balance = pool.balance - amount;
     }
 }
