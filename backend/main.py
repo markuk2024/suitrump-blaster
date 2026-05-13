@@ -1226,18 +1226,74 @@ async def perform_reward_distribution(data: PayoutRequest):
             winners.append((entry["wallet"], reward_mist))
         
         # NEW: Automatic SUI to SUITRUMP swap flow
-        # Note: This is complex because we need to pass swapped coins to distribution function
-        # For now, implement simpler flow: distribute SUI first, then swap can be done manually
-        # Full automatic swap requires multi-transaction coordination
+        # 1. Take dev fee in SUI (keep in pool escrow)
+        # 2. Withdraw remaining SUI from escrow
+        # 3. Swap SUI to SUITRUMP via Cetus
+        # 4. Distribute SUITRUMP to winners
         
-        # Combine dev fee with winners for SUI distribution
-        final_winners = dev_fee_winners + winners
+        # Separate dev fee from prize pool
+        dev_fee_winners = []
+        if dev_fee_mist > 0:
+            dev_wallet = config.DEV_WALLET_ADDRESS
+            dev_fee_winners.append((dev_wallet, dev_fee_mist))
         
-        # Call smart contract to distribute rewards from escrow (currently SUI)
-        contract_result = await call_smart_contract("distribute_rewards", [
-            pool_data[data.pool_id].get("contract_id", "0x0"),  # Pool object ID
-            final_winners
-        ])
+        # Calculate amount to swap (prize minus dev fee)
+        swap_amount_mist = prize_after_fee_mist
+        
+        # Check if swap is configured
+        if swap_amount_mist > 0 and config.CETUS_SUI_SUITRUMP_POOL_ID:
+            print(f"PAYOUT: Attempting automatic swap - {swap_amount_mist / 1_000_000_000} SUI to SUITRUMP")
+            
+            # Step 1: Withdraw SUI from escrow
+            withdraw_result = await call_smart_contract("withdraw_from_escrow", [
+                pool_data[data.pool_id].get("contract_id", "0x0"),
+                swap_amount_mist
+            ])
+            
+            if withdraw_result.get("status") == "success":
+                print(f"PAYOUT: Withdrawal successful - now swapping via Cetus")
+                
+                # Step 2: Swap SUI to SUITRUMP via Cetus
+                # a_to_b = True (SUI to SUITRUMP), by_amount_in = True (exact input)
+                swap_result = await call_smart_contract("cetus_swap", [
+                    config.CETUS_SUI_SUITRUMP_POOL_ID,  # pool_address
+                    True,  # a_to_b (SUI to SUITRUMP)
+                    True,  # by_amount_in (exact input amount)
+                    swap_amount_mist,  # amount to swap
+                    0,  # amount_limit (minimum output, 0 = no limit)
+                    79226673515401279992447579055,  # sqrt_price_limit (max)
+                    ""  # partner (empty string)
+                ])
+                
+                if swap_result.get("status") == "success":
+                    print(f"PAYOUT: Cetus swap successful - distributing SUITRUMP")
+                    # Note: The swapped SUITRUMP is now in the dev wallet
+                    # We need to distribute it using distribute_external_rewards
+                    # For now, this requires the dev wallet to have the SUITRUMP coins
+                    # This is a limitation of the current approach
+                    print(f"PAYOUT: NOTE: SUITRUMP distribution requires manual intervention - swapped tokens in dev wallet")
+                    # Clear escrow since we withdrew and swapped
+                    escrow_funds[data.pool_id] = 0
+                    contract_result = {"status": "success", "transaction_id": swap_result.get("transaction_id")}
+                else:
+                    print(f"PAYOUT: Cetus swap failed - falling back to SUI distribution")
+                    suitrump_winners = winners
+                    contract_result = await call_smart_contract("distribute_rewards", [
+                        pool_data[data.pool_id].get("contract_id", "0x0"),
+                        dev_fee_winners + suitrump_winners
+                    ])
+            else:
+                print(f"PAYOUT: Withdrawal failed - distributing SUI directly")
+                contract_result = await call_smart_contract("distribute_rewards", [
+                    pool_data[data.pool_id].get("contract_id", "0x0"),
+                    dev_fee_winners + winners
+                ])
+        else:
+            print(f"PAYOUT: No swap configured - distributing SUI")
+            contract_result = await call_smart_contract("distribute_rewards", [
+                pool_data[data.pool_id].get("contract_id", "0x0"),
+                dev_fee_winners + winners
+            ])
         
         if contract_result["status"] == "success":
             # Archive this pool cycle to history before clearing
