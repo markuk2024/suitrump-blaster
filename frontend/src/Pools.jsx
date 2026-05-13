@@ -112,8 +112,10 @@ function Pools({ walletAddress, onSelectPool, onBack }) {
       }
 
       const entryFee = pool.entry_fee || "0.1";
-      const entryFeeMist = parseFloat(entryFee) * 1_000_000_000;
-      console.log('Entry fee raw:', pool.entry_fee, 'parsed:', entryFee, 'mist:', entryFeeMist);
+      // Parse entry fee - handle both numeric strings and "X.X SUI" format
+      const entryFeeNumeric = parseFloat(entryFee.replace(/[^\d.]/g, ''));
+      const entryFeeMist = entryFeeNumeric * 1_000_000_000;
+      console.log('Entry fee raw:', pool.entry_fee, 'parsed:', entryFeeNumeric, 'mist:', entryFeeMist);
       let apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
       apiUrl = apiUrl.replace(/\/$/, '');
       const packageId = import.meta.env.VITE_SUI_PACKAGE_ID || "0x0";
