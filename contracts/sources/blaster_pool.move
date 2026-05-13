@@ -255,6 +255,40 @@ module blaster::pool {
         pool.is_active = false;
     }
 
+    /// NEW: Distribute rewards from external coins (not escrow)
+    /// Used for distributing swapped tokens (e.g., SUITRUMP)
+    /// Only callable by dev wallet
+    /// Generic over any coin type
+    public entry fun distribute_external_rewards<T>(
+        pool: &mut Pool,
+        coin: Coin<T>,
+        winners: vector<address>,
+        amounts: vector<u64>,
+        ctx: &mut TxContext
+    ) {
+        assert!(tx_context::signer(ctx) == pool.dev_wallet, EInvalidFee);
+        
+        let num_winners = vector::length(&winners);
+        let num_amounts = vector::length(&amounts);
+        assert!(num_winners == num_amounts, EInvalidFee);
+        
+        let mut i = 0;
+        while (i < num_winners) {
+            let winner = *vector::borrow(&winners, i);
+            let amount = *vector::borrow(&amounts, i);
+            
+            if (amount > 0) {
+                let payout = coin::split(&mut coin, amount, ctx);
+                transfer::public_transfer(payout, winner);
+            };
+            
+            i = i + 1;
+        };
+        
+        // Return remaining coins to dev wallet
+        transfer::public_transfer(coin, pool.dev_wallet);
+    }
+
     /// NEW: Withdraw SUI from escrow for external swapping
     /// Only callable by dev wallet
     public entry fun withdraw_from_escrow(pool: &mut Pool, amount: u64, ctx: &mut TxContext) {

@@ -566,14 +566,30 @@ async def call_smart_contract(function: str, args: list):
                         "transaction_id": tx_digest,
                         "message": "Cetus swap executed on-chain"
                     }
-                else:
-                    # Generic fallback - just simulate for unsupported functions
-                    print(f"Function {function} not implemented for real signing, using simulation")
+                elif function == "withdraw_from_escrow":
+                    # args: [pool_object_id, amount]
+                    pool_id = args[0] if len(args) > 0 else "0x0"
+                    amount = args[1] if len(args) > 1 else 0
+                    
+                    # Build transaction to withdraw from escrow
+                    tx_builder = client.get_move_call_tx_builder(
+                        target=f"{config.PACKAGE_ID}::pool::withdraw_from_escrow",
+                        arguments=[ObjectID(pool_id), SuiU64(amount)]
+                    )
+                    
+                    # Execute the transaction
+                    result = client.execute_tx(tx_builder)
+                    result = handle_result(result)
+                    tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                    
+                    print(f"Withdrawal succeeded: {tx_digest}")
                     return {
-                        "status": "simulated",
+                        "status": "success",
                         "function": function,
-                        "transaction_id": f"sim_{int(time.time())}"
+                        "transaction_id": tx_digest,
+                        "message": "Withdrawal executed on-chain"
                     }
+                
             except Exception as e:
                 print(f"Real transaction failed: {e}")
                 # Fall through to simulation
@@ -1169,14 +1185,18 @@ async def perform_reward_distribution(data: PayoutRequest):
             })
             winners.append((entry["wallet"], reward_mist))
         
-        # Call smart contract to distribute rewards
-        # Note: Currently distributes SUI. To swap to SUITRUMP, we need to:
-        # 1. Swap SUI to SUITRUMP via Cetus
-        # 2. Distribute SUITRUMP to winners
-        # This is complex because SUI is locked in pool escrow
+        # NEW: Automatic SUI to SUITRUMP swap flow
+        # Note: This is complex because we need to pass swapped coins to distribution function
+        # For now, implement simpler flow: distribute SUI first, then swap can be done manually
+        # Full automatic swap requires multi-transaction coordination
+        
+        # Combine dev fee with winners for SUI distribution
+        final_winners = dev_fee_winners + winners
+        
+        # Call smart contract to distribute rewards from escrow (currently SUI)
         contract_result = await call_smart_contract("distribute_rewards", [
             pool_data[data.pool_id].get("contract_id", "0x0"),  # Pool object ID
-            winners
+            final_winners
         ])
         
         if contract_result["status"] == "success":
