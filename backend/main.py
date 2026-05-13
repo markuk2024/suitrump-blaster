@@ -622,8 +622,11 @@ async def call_smart_contract(function: str, args: list):
                         "message": "Withdrawal executed on-chain"
                     }
                 
+            except Exception as e:
+                print(f"Real transaction failed: {e}")
+                # Fall through to simulation
         
-        # Fallback to simulation
+        # Fallback to simulation (this is inside the outer try block)
         if not admin_key:
             print(f"ADMIN_PRIVATE_KEY not found - simulating {function}")
         elif not HAS_PYSUI:
