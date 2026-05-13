@@ -532,15 +532,6 @@ async def call_smart_contract(function: str, args: list):
                         "function": function,
                         "transaction_id": f"sim_{int(time.time())}"
                     }
-                tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
-                
-                print(f"Transaction succeeded: {tx_digest}")
-                return {
-                    "status": "success",
-                    "function": function,
-                    "transaction_id": tx_digest,
-                    "message": "Transaction executed on-chain"
-                }
             except Exception as e:
                 print(f"Real transaction failed: {e}")
                 # Fall through to simulation

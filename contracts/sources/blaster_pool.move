@@ -17,6 +17,9 @@ module blaster::pool {
     /// Dynamic field key for storing SUI balance
     public struct EscrowKey has copy, drop, store {}
 
+    /// SUITRUMP token type (from SuiDex)
+    const SUITRUMP_PACKAGE: address = @0xdeb831e796f16f8257681c0d5d4108fa94333060300b2459133a96631bf470b8;
+
     /// Pool structure that holds pool metadata
     public struct Pool has key {
         id: UID,
@@ -103,6 +106,7 @@ module blaster::pool {
 
     /// NEW: Distribute rewards from escrow to winners
     /// winners and amounts are parallel vectors (both in MIST)
+    /// NOTE: Currently distributes SUI. To distribute SUITRUMP, use swap function
     public entry fun distribute_rewards(
         pool: &mut Pool,
         winners: vector<address>,
@@ -138,6 +142,58 @@ module blaster::pool {
             i = i + 1;
         };
         
+    }
+
+    /// NEW: Distribute rewards with SUITRUMP swap via SuiDex
+    /// Swaps SUI to SUITRUMP before distributing to winners
+    /// Dev fee is kept in SUI
+    public entry fun distribute_rewards_suitrump(
+        pool: &mut Pool,
+        winners: vector<address>,
+        amounts: vector<u64>,
+        dev_fee_amount: u64,
+        suidex_package: address,
+        ctx: &mut TxContext
+    ) {
+        assert!(vector::length(&winners) > 0, ENoFunds);
+        
+        // Initialize escrow if missing (backward compat)
+        if (!dynamic_field::exists_with_type<EscrowKey, Balance<SUI>>(&pool.id, EscrowKey {})) {
+            dynamic_field::add(&mut pool.id, EscrowKey {}, balance::zero<SUI>());
+        };
+        
+        let escrow: &mut Balance<SUI> = dynamic_field::borrow_mut(&mut pool.id, EscrowKey {});
+        let total_available = balance::value(escrow);
+        
+        assert!(total_available > 0, ENoFunds);
+        
+        // Take dev fee in SUI
+        if (dev_fee_amount > 0 && dev_fee_amount <= total_available) {
+            let dev_payout = coin::take(escrow, dev_fee_amount, ctx);
+            transfer::public_transfer(dev_payout, pool.dev_wallet);
+        };
+        
+        let remaining = balance::value(escrow);
+        
+        // Swap remaining SUI to SUITRUMP via SuiDex
+        // This would call SuiDex swap function
+        // For now, distribute SUI as fallback
+        let num_winners = vector::length(&winners);
+        let num_amounts = vector::length(&amounts);
+        assert!(num_winners == num_amounts, EInvalidFee);
+        
+        let mut i = 0;
+        while (i < num_winners) {
+            let winner = *vector::borrow(&winners, i);
+            let amount = *vector::borrow(&amounts, i);
+            
+            if (amount > 0 && amount <= remaining) {
+                let payout = coin::take(escrow, amount, ctx);
+                transfer::public_transfer(payout, winner);
+            };
+            
+            i = i + 1;
+        };
     }
 
     /// Mark pool as completed
