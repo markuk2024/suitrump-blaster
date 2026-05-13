@@ -624,9 +624,8 @@ async def call_smart_contract(function: str, args: list):
                 
             except Exception as e:
                 print(f"Real transaction failed: {e}")
-                # Fall through to simulation
         
-        # Fallback to simulation (this is inside the outer try block)
+        # Fallback to simulation
         if not admin_key:
             print(f"ADMIN_PRIVATE_KEY not found - simulating {function}")
         elif not HAS_PYSUI:
@@ -1062,7 +1061,8 @@ async def startup_event():
     global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, active_games, pool_history, pool_start_times
     load_data()
     
-    # Initialize pool data with updated contract IDs
+    # Initialize pool data with updated contract IDs and entry fees
+    # Force update entry fees even if pool_data exists
     if not pool_data:
         pool_data = {
             "daily": {
@@ -1084,6 +1084,17 @@ async def startup_event():
                 "players": 0
             }
         }
+    else:
+        # Update existing pool data with new contract IDs and entry fees
+        if "daily" in pool_data:
+            pool_data["daily"]["contract_id"] = "0x9aca57fc06b61557f9f893d9ad25a96fa6a1ad053bd2b36bced0914e45a6af66"
+            pool_data["daily"]["entry_fee"] = 2_000_000_000  # 2 SUI
+        if "weekly" in pool_data:
+            pool_data["weekly"]["contract_id"] = "0x1aabc79aa06979b37b0923b18c7615dd3487a641518eb37719417b550b263d65"
+            pool_data["weekly"]["entry_fee"] = 2_500_000_000  # 2.5 SUI
+        if "monthly" in pool_data:
+            pool_data["monthly"]["contract_id"] = "0xf7e04ca08481dda0eb6d9b53c058bcb15a49bb309b79168cf5914335fea9b785"
+            pool_data["monthly"]["entry_fee"] = 1_000_000_000  # 1 SUI
     
     # Initialize pool start times if missing
     if not pool_start_times:
