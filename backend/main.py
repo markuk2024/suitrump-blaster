@@ -654,7 +654,11 @@ async def call_smart_contract(function: str, args: list):
 
 @app.get("/")
 def root():
-    return {"status": "SuiTrump Blaster Backend Running"}
+    return {"status": "ok", "service": "SuiTrump Blaster Backend", "message": "Backend is running"}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 import asyncio
 
