@@ -1063,20 +1063,20 @@ async def startup_event():
     if not pool_data:
         pool_data = {
             "daily": {
-                "contract_id": "0x209058b2f7e9d95238c4d6ea5f1f7abe565e56d3b3818d488e36c2e040dc8789",
-                "entry_fee": 5_000_000_000,
+                "contract_id": "0x9aca57fc06b61557f9f893d9ad25a96fa6a1ad053bd2b36bced0914e45a6af66",
+                "entry_fee": 2_000_000_000,  # 2 SUI
                 "duration": 86400,
                 "players": 0
             },
             "weekly": {
                 "contract_id": "0x1aabc79aa06979b37b0923b18c7615dd3487a641518eb37719417b550b263d65",
-                "entry_fee": 2_500_000_000,
+                "entry_fee": 2_500_000_000,  # 2.5 SUI
                 "duration": 604800,
                 "players": 0
             },
             "monthly": {
                 "contract_id": "0xf7e04ca08481dda0eb6d9b53c058bcb15a49bb309b79168cf5914335fea9b785",
-                "entry_fee": 1_000_000_000,
+                "entry_fee": 1_000_000_000,  # 1 SUI
                 "duration": 2419200,
                 "players": 0
             }

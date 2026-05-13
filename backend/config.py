@@ -14,8 +14,6 @@ def _get_env(*names: str, default: str = "") -> str:
     return default
 
 # Pool Configuration
-POOL_ENTRY_FEE = 5_000_000_000  # 5 SUI in Mist (default entry fee)
-
 POOL_DURATIONS = {
     "daily": 86400,      # 24 hours in seconds
     "weekly": 604800,    # 7 days in seconds
@@ -26,6 +24,18 @@ POOL_PAYOUTS = {
     "daily": [50, 30, 20],
     "weekly": [40, 25, 20, 15],
     "monthly": [45, 25, 20, 10]
+}
+
+POOL_ENTRY_FEES = {
+    "daily": 2_000_000_000,  # 2 SUI
+    "weekly": 2_500_000_000,  # 2.5 SUI
+    "monthly": 1_000_000_000,  # 1 SUI
+}
+
+POOL_CONTRACT_IDS = {
+    "daily": "0x9aca57fc06b61557f9f893d9ad25a96fa6a1ad053bd2b36bced0914e45a6af66",
+    "weekly": "0x1aabc79aa06979b37b0923b18c7615dd3487a641518eb37719417b550b263d65",
+    "monthly": "0xf7e04ca08481dda0eb6d9b53c058bcb15a49bb309b79168cf5914335fea9b785",
 }
 
 # Cetus Configuration for SUI to SUITRUMP swaps
