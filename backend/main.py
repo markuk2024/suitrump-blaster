@@ -993,6 +993,55 @@ async def distribute_rewards(data: PayoutRequest, x_dev_wallet: str = Depends(de
     """Distribute rewards to winners of a pool (API Endpoint)"""
     return await perform_reward_distribution(data)
 
+@app.post("/force-distribute-rewards")
+async def force_distribute_rewards(data: PayoutRequest, x_dev_wallet: str = Depends(dev_wallet_auth)):
+    """Force distribute rewards regardless of pool timer - for immediate payout testing"""
+    # Override pool start time to make it appear expired
+    original_start_time = pool_start_times.get(data.pool_id, int(time.time()))
+    pool_start_times[data.pool_id] = int(time.time()) - POOL_DURATIONS.get(data.pool_id, 86400) - 1
+    
+    result = await perform_reward_distribution(data)
+    
+    # Restore original start time if payout failed
+    if result.get("status") != "success":
+        pool_start_times[data.pool_id] = original_start_time
+    
+    return result
+
+@app.post("/add-test-score")
+async def add_test_score(wallet: str, score: int, pool_id: str, x_dev_wallet: str = Depends(dev_wallet_auth)):
+    """Add a test score for immediate payout testing"""
+    now = int(time.time() * 1000)
+    
+    if pool_id not in pool_leaderboards:
+        pool_leaderboards[pool_id] = []
+    
+    pool_leaderboards[pool_id].append({
+        "wallet": wallet,
+        "score": score,
+        "timestamp": now,
+        "game_duration": 60
+    })
+    pool_leaderboards[pool_id].sort(key=lambda x: x["score"], reverse=True)
+    
+    # Also add to participants if not already there
+    if pool_id not in pool_participants:
+        pool_participants[pool_id] = []
+    
+    existing = any(p.get("wallet") == wallet if isinstance(p, dict) else p == wallet for p in pool_participants[pool_id])
+    if not existing:
+        pool_participants[pool_id].append({
+            "wallet": wallet,
+            "joined_at": int(time.time()),
+            "games_played": 1,
+            "best_score": score,
+            "total_score": score,
+            "last_active": int(time.time())
+        })
+    
+    save_data()
+    return {"status": "success", "message": f"Added test score {score} for {wallet} in pool {pool_id}"}
+
 async def perform_reward_distribution(data: PayoutRequest):
     """Internal logic to distribute rewards to winners of a pool"""
     try:
