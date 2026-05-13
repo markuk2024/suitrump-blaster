@@ -17,8 +17,11 @@ module blaster::pool {
     /// Dynamic field key for storing SUI balance
     public struct EscrowKey has copy, drop, store {}
 
-    /// SUITRUMP token type (from SuiDex)
+    /// SUITRUMP token type
     const SUITRUMP_PACKAGE: address = @0xdeb831e796f16f8257681c0d5d4108fa94333060300b2459133a96631bf470b8;
+    
+    /// Cetus CLMM package for swapping
+    const CETUS_PACKAGE: address = @0x1eabed72c53feb3805120a081dc15963c204dc8d091542592abaf7a35689b2fb;
 
     /// Pool structure that holds pool metadata
     public struct Pool has key {
@@ -144,7 +147,7 @@ module blaster::pool {
         
     }
 
-    /// NEW: Distribute rewards with SUITRUMP swap via SuiDex
+    /// NEW: Distribute rewards with SUITRUMP swap via Cetus CLMM
     /// Swaps SUI to SUITRUMP before distributing to winners
     /// Dev fee is kept in SUI
     public entry fun distribute_rewards_suitrump(
@@ -152,7 +155,7 @@ module blaster::pool {
         winners: vector<address>,
         amounts: vector<u64>,
         dev_fee_amount: u64,
-        suidex_package: address,
+        cetus_pool_id: address,
         ctx: &mut TxContext
     ) {
         assert!(vector::length(&winners) > 0, ENoFunds);
@@ -175,9 +178,9 @@ module blaster::pool {
         
         let remaining = balance::value(escrow);
         
-        // Swap remaining SUI to SUITRUMP via SuiDex
-        // This would call SuiDex swap function
-        // For now, distribute SUI as fallback
+        // Swap remaining SUI to SUITRUMP via Cetus CLMM
+        // Note: This requires the Cetus pool object and proper swap integration
+        // For now, distribute SUI as fallback until Cetus integration is complete
         let num_winners = vector::length(&winners);
         let num_amounts = vector::length(&amounts);
         assert!(num_winners == num_amounts, EInvalidFee);
