@@ -1170,6 +1170,10 @@ async def perform_reward_distribution(data: PayoutRequest):
             winners.append((entry["wallet"], reward_mist))
         
         # Call smart contract to distribute rewards
+        # Note: Currently distributes SUI. To swap to SUITRUMP, we need to:
+        # 1. Swap SUI to SUITRUMP via Cetus
+        # 2. Distribute SUITRUMP to winners
+        # This is complex because SUI is locked in pool escrow
         contract_result = await call_smart_contract("distribute_rewards", [
             pool_data[data.pool_id].get("contract_id", "0x0"),  # Pool object ID
             winners
