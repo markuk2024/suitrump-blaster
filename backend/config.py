@@ -38,7 +38,7 @@ CETUS_SUI_SUITRUMP_POOL_ID = os.getenv("CETUS_SUI_SUITRUMP_POOL_ID", "0x2c2bbe56
 @dataclass
 class Config:
     SUI_NETWORK: str = "https://fullnode.mainnet.sui.io"
-    PACKAGE_ID: str = _get_env("PACKAGE_ID", "PackageID", default="")
+    PACKAGE_ID: str = _get_env("PACKAGE_ID", "PackageID", default="0x175918d5654f0eaf645412ce72399bef2c2508e95f01bd81bf27c880b839e1b8")
     MAX_SCORE_PER_SECOND: int = 100
     MAX_GAME_DURATION: int = 300  # 5 minutes
     DEV_FEE_PERCENTAGE: float = 2.5  # 2.5% dev fee on prize pools

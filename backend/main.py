@@ -1024,6 +1024,46 @@ async def get_balance(address: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.on_event("startup")
+async def startup_event():
+    """Load persistent data and start background tasks"""
+    global global_leaderboard, pool_leaderboards, pool_data, transactions, escrow_funds, pool_participants, dev_fees_collected, active_games, pool_history, pool_start_times
+    load_data()
+    
+    # Initialize pool data with updated contract IDs
+    if not pool_data:
+        pool_data = {
+            "daily": {
+                "contract_id": "0x209058b2f7e9d95238c4d6ea5f1f7abe565e56d3b3818d488e36c2e040dc8789",
+                "entry_fee": 5_000_000_000,
+                "duration": 86400,
+                "players": 0
+            },
+            "weekly": {
+                "contract_id": "0x1aabc79aa06979b37b0923b18c7615dd3487a641518eb37719417b550b263d65",
+                "entry_fee": 2_500_000_000,
+                "duration": 604800,
+                "players": 0
+            },
+            "monthly": {
+                "contract_id": "0xf7e04ca08481dda0eb6d9b53c058bcb15a49bb309b79168cf5914335fea9b785",
+                "entry_fee": 1_000_000_000,
+                "duration": 2419200,
+                "players": 0
+            }
+        }
+    
+    # Initialize pool start times if missing
+    if not pool_start_times:
+        pool_start_times = {
+            "daily": int(time.time()),
+            "weekly": int(time.time()),
+            "monthly": int(time.time())
+        }
+    
+    # Start auto-distribute task
+    asyncio.create_task(auto_distribute_task())
+
 @app.post("/reset-data", dependencies=[Depends(dev_wallet_auth)])
 async def reset_data():
     """Reset all data - clear pools, scores, and transactions"""

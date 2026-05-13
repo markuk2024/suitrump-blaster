@@ -1,7 +1,7 @@
 #[allow(duplicate_alias)]
 module blaster::pool {
     use sui::transfer;
-    use sui::tx_context::{TxContext, tx_context};
+    use sui::tx_context::TxContext;
     use sui::object;
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
@@ -16,12 +16,6 @@ module blaster::pool {
 
     /// Dynamic field key for storing SUI balance
     public struct EscrowKey has copy, drop, store {}
-
-    /// SUITRUMP token type
-    const SUITRUMP_PACKAGE: address = @0xdeb831e796f16f8257681c0d5d4108fa94333060300b2459133a96631bf470b8;
-    
-    /// Cetus CLMM package for swapping
-    const CETUS_PACKAGE: address = @0x1eabed72c53feb3805120a081dc15963c204dc8d091542592abaf7a35689b2fb;
 
     /// Pool structure that holds pool metadata
     public struct Pool has key {
@@ -155,7 +149,7 @@ module blaster::pool {
         winners: vector<address>,
         amounts: vector<u64>,
         dev_fee_amount: u64,
-        cetus_pool_id: address,
+        _cetus_pool_id: address,
         ctx: &mut TxContext
     ) {
         assert!(vector::length(&winners) > 0, ENoFunds);
@@ -261,12 +255,12 @@ module blaster::pool {
     /// Generic over any coin type
     public entry fun distribute_external_rewards<T>(
         pool: &mut Pool,
-        coin: Coin<T>,
+        mut coin: Coin<T>,
         winners: vector<address>,
         amounts: vector<u64>,
         ctx: &mut TxContext
     ) {
-        assert!(tx_context::signer(ctx) == pool.dev_wallet, EInvalidFee);
+        assert!(tx_context::sender(ctx) == pool.dev_wallet, EInvalidFee);
         
         let num_winners = vector::length(&winners);
         let num_amounts = vector::length(&amounts);
@@ -292,7 +286,7 @@ module blaster::pool {
     /// NEW: Withdraw SUI from escrow for external swapping
     /// Only callable by dev wallet
     public entry fun withdraw_from_escrow(pool: &mut Pool, amount: u64, ctx: &mut TxContext) {
-        assert!(tx_context::signer(ctx) == pool.dev_wallet, EInvalidFee);
+        assert!(tx_context::sender(ctx) == pool.dev_wallet, EInvalidFee);
         
         if (!dynamic_field::exists_with_type<EscrowKey, Balance<SUI>>(&pool.id, EscrowKey {})) {
             dynamic_field::add(&mut pool.id, EscrowKey {}, balance::zero<SUI>());
