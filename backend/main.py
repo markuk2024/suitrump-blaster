@@ -16,12 +16,12 @@ try:
     from pysui import SuiConfig, SyncClient, handle_result, ObjectID
     try:
         from pysui.sui.sui_types.address import SuiAddress
-        from pysui.sui.sui_types.scalars import SuiString, SuiU64
+        from pysui.sui.sui_types.scalars import SuiString, SuiU64, SuiU128, SuiBool
         from pysui.sui.sui_types.collections import SuiArray
     except ImportError:
         # Fall back to legacy module path (pysui < 0.95)
         from pysui.sui_types.address import SuiAddress
-        from pysui.sui_types.scalars import SuiString, SuiU64
+        from pysui.sui_types.scalars import SuiString, SuiU64, SuiU128, SuiBool
         from pysui.sui_types.collections import SuiArray
     HAS_PYSUI = True
 except ImportError as e:
@@ -523,6 +523,48 @@ async def call_smart_contract(function: str, args: list):
                         "function": function,
                         "transaction_id": tx_digest,
                         "message": "Transaction executed on-chain"
+                    }
+                
+                elif function == "cetus_swap":
+                    # args: [pool_address, a_to_b, by_amount_in, amount, amount_limit, sqrt_price_limit, partner]
+                    pool_address = args[0] if len(args) > 0 else "0x0"
+                    a_to_b = args[1] if len(args) > 1 else True
+                    by_amount_in = args[2] if len(args) > 2 else True
+                    amount = args[3] if len(args) > 3 else 0
+                    amount_limit = args[4] if len(args) > 4 else 0
+                    sqrt_price_limit = args[5] if len(args) > 5 else 79226673515401279992447579055
+                    partner = args[6] if len(args) > 6 else ""
+                    
+                    # Cetus package ID
+                    cetus_package = "0x1eabed72c53feb3805120a081dc15963c204dc8d091542592abaf7a35689b2fb"
+                    suitrump_type = "0xdeb831e796f16f8257681c0d5d4108fa94333060300b2459133a96631bf470b8::suitrump::SUITRUMP"
+                    
+                    # Build Cetus swap transaction
+                    tx_builder = client.get_move_call_tx_builder(
+                        target=f"{cetus_package}::pool_script::swap",
+                        type_arguments=["0x2::sui::SUI", suitrump_type],
+                        arguments=[
+                            ObjectID(pool_address),
+                            SuiBool(a_to_b),
+                            SuiBool(by_amount_in),
+                            SuiU64(amount),
+                            SuiU64(amount_limit),
+                            SuiU128(sqrt_price_limit),
+                            SuiString(partner)
+                        ]
+                    )
+                    
+                    # Execute the transaction
+                    result = client.execute_tx(tx_builder)
+                    result = handle_result(result)
+                    tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                    
+                    print(f"Cetus swap succeeded: {tx_digest}")
+                    return {
+                        "status": "success",
+                        "function": function,
+                        "transaction_id": tx_digest,
+                        "message": "Cetus swap executed on-chain"
                     }
                 else:
                     # Generic fallback - just simulate for unsupported functions

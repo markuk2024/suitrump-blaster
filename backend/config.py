@@ -13,6 +13,28 @@ def _get_env(*names: str, default: str = "") -> str:
             return value
     return default
 
+# Pool Configuration
+POOL_ENTRY_FEE = 5_000_000_000  # 5 SUI in Mist (default entry fee)
+
+POOL_DURATIONS = {
+    "daily": 86400,      # 24 hours in seconds
+    "weekly": 604800,    # 7 days in seconds
+    "monthly": 2419200   # 28 days in seconds
+}
+
+POOL_PAYOUTS = {
+    "daily": [50, 30, 20],
+    "weekly": [40, 25, 20, 15],
+    "monthly": [45, 25, 20, 10]
+}
+
+# Cetus Configuration for SUI to SUITRUMP swaps
+CETUS_PACKAGE = "0x1eabed72c53feb3805120a081dc15963c204dc8d091542592abaf7a35689b2fb"
+SUITRUMP_PACKAGE = "0xdeb831e796f16f8257681c0d5d4108fa94333060300b2459133a96631bf470b8"
+SUITRUMP_TYPE = f"{SUITRUMP_PACKAGE}::suitrump::SUITRUMP"
+# Cetus pool ID for SUI/SUITRUMP pair (needs to be set)
+CETUS_SUI_SUITRUMP_POOL_ID = os.getenv("CETUS_SUI_SUITRUMP_POOL_ID", "")
+
 @dataclass
 class Config:
     SUI_NETWORK: str = "https://fullnode.mainnet.sui.io"
