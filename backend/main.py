@@ -566,6 +566,38 @@ async def call_smart_contract(function: str, args: list):
                         "transaction_id": tx_digest,
                         "message": "Cetus swap executed on-chain"
                     }
+                elif function == "distribute_external_rewards":
+                    # args: [pool_object_id, coin_object_id, [(winner_addr, amount), ...]]
+                    pool_id = args[0] if len(args) > 0 else "0x0"
+                    coin_id = args[1] if len(args) > 1 else "0x0"
+                    winners = args[2] if len(args) > 2 else []
+                    
+                    # Separate into parallel vectors
+                    winner_addrs_list = [SuiAddress(w[0]) for w in winners]
+                    winner_amounts_list = [SuiU64(int(w[1])) for w in winners]
+                    
+                    winner_addrs = SuiArray(winner_addrs_list)
+                    winner_amounts = SuiArray(winner_amounts_list)
+                    
+                    # Build transaction to distribute external rewards with SUITRUMP type
+                    tx_builder = client.get_move_call_tx_builder(
+                        target=f"{config.PACKAGE_ID}::pool::distribute_external_rewards",
+                        type_arguments=[config.SUITRUMP_TYPE],
+                        arguments=[ObjectID(pool_id), ObjectID(coin_id), winner_addrs, winner_amounts]
+                    )
+                    
+                    # Execute the transaction
+                    result = client.execute_tx(tx_builder)
+                    result = handle_result(result)
+                    tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                    
+                    print(f"External distribution succeeded: {tx_digest}")
+                    return {
+                        "status": "success",
+                        "function": function,
+                        "transaction_id": tx_digest,
+                        "message": "External distribution executed on-chain"
+                    }
                 elif function == "withdraw_from_escrow":
                     # args: [pool_object_id, amount]
                     pool_id = args[0] if len(args) > 0 else "0x0"
@@ -590,9 +622,6 @@ async def call_smart_contract(function: str, args: list):
                         "message": "Withdrawal executed on-chain"
                     }
                 
-            except Exception as e:
-                print(f"Real transaction failed: {e}")
-                # Fall through to simulation
         
         # Fallback to simulation
         if not admin_key:
@@ -1266,15 +1295,55 @@ async def perform_reward_distribution(data: PayoutRequest):
                 ])
                 
                 if swap_result.get("status") == "success":
-                    print(f"PAYOUT: Cetus swap successful - distributing SUITRUMP")
-                    # Note: The swapped SUITRUMP is now in the dev wallet
-                    # We need to distribute it using distribute_external_rewards
-                    # For now, this requires the dev wallet to have the SUITRUMP coins
-                    # This is a limitation of the current approach
-                    print(f"PAYOUT: NOTE: SUITRUMP distribution requires manual intervention - swapped tokens in dev wallet")
-                    # Clear escrow since we withdrew and swapped
-                    escrow_funds[data.pool_id] = 0
-                    contract_result = {"status": "success", "transaction_id": swap_result.get("transaction_id")}
+                    print(f"PAYOUT: Cetus swap successful - now distributing SUITRUMP")
+                    
+                    # After swap, the dev wallet has SUITRUMP coins
+                    # We need to distribute them to winners
+                    # For now, we'll use a simplified approach:
+                    # 1. Get the swap transaction digest
+                    # 2. Query the transaction to find the created SUITRUMP coin objects
+                    # 3. Use those coins to distribute to winners
+                    
+                    swap_tx_digest = swap_result.get("transaction_id", "")
+                    if swap_tx_digest:
+                        print(f"PAYOUT: Swap transaction digest: {swap_tx_digest}")
+                        # Query the transaction to get the created coin objects
+                        try:
+                            tx_response = client.client.get_transaction_block(swap_tx_digest)
+                            if hasattr(tx_response, 'effects') and hasattr(tx_response.effects, 'created'):
+                                created_objects = tx_response.effects.created
+                                suitrump_coins = []
+                                for obj in created_objects:
+                                    if hasattr(obj, 'type') and config.SUITRUMP_TYPE in str(obj.type):
+                                        suitrump_coins.append(obj.reference.object_id)
+                                
+                                if suitrump_coins:
+                                    print(f"PAYOUT: Found {len(suitrump_coins)} SUITRUMP coin objects")
+                                    # Distribute using the first coin object
+                                    # Note: This is a simplified approach - assumes single coin
+                                    coin_id = suitrump_coins[0]
+                                    distribute_result = await call_smart_contract("distribute_external_rewards", [
+                                        pool_data[data.pool_id].get("contract_id", "0x0"),
+                                        coin_id,
+                                        winners
+                                    ])
+                                    
+                                    if distribute_result.get("status") == "success":
+                                        print(f"PAYOUT: SUITRUMP distribution successful")
+                                        escrow_funds[data.pool_id] = 0
+                                        contract_result = distribute_result
+                                    else:
+                                        print(f"PAYOUT: SUITRUMP distribution failed - manual intervention required")
+                                        contract_result = {"status": "partial", "transaction_id": swap_tx_digest}
+                                else:
+                                    print(f"PAYOUT: No SUITRUMP coins found in swap result - manual intervention required")
+                                    contract_result = {"status": "partial", "transaction_id": swap_tx_digest}
+                        except Exception as e:
+                            print(f"PAYOUT: Failed to query swap transaction: {e} - manual intervention required")
+                            contract_result = {"status": "partial", "transaction_id": swap_tx_digest}
+                    else:
+                        print(f"PAYOUT: No swap transaction digest - manual intervention required")
+                        contract_result = {"status": "partial", "transaction_id": swap_tx_digest}
                 else:
                     print(f"PAYOUT: Cetus swap failed - falling back to SUI distribution")
                     suitrump_winners = winners
