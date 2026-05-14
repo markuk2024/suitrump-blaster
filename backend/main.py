@@ -761,17 +761,23 @@ async def auto_distribute_task():
                         "auto_distribution": True
                     })
                     
-                    # Call the distribution logic (bypass auth for internal automation)
-                    try:
-                        result = await perform_reward_distribution(PayoutRequest(pool_id=pool_id, num_winners=10))
-                    except Exception as dist_err:
-                        print(f"AUTOMATION: Distribution failed for {pool_id}: {dist_err}")
-                        continue
-
-                    status = result.get("status") if isinstance(result, dict) else None
-                    if status != "success":
-                        print(f"AUTOMATION: Distribution did not complete for {pool_id} (status={status}). Pool will remain open for manual retry.")
-                        continue
+                    # Skip automatic on-chain distribution due to pysui API incompatibility
+                    # Use manual payout endpoint instead
+                    print(f"AUTOMATION: Pool {pool_id} has expired. Skipping automatic on-chain distribution.")
+                    print(f"AUTOMATION: Use manual payout endpoint to distribute rewards to winners.")
+                    print(f"AUTOMATION: Participants: {len(participants)}, Escrow: {escrow_balance} mist")
+                    
+                    # Archive current pool state before reset
+                    pool_history.append({
+                        "pool_id": pool_id,
+                        "expired_at": now,
+                        "start_time": start_time,
+                        "final_leaderboard": pool_leaderboards.get(pool_id, [])[:10],
+                        "final_participants": [p.get("wallet") if isinstance(p, dict) else p for p in pool_participants.get(pool_id, [])],
+                        "escrow_balance": escrow_funds.get(pool_id, 0),
+                        "auto_distribution": False,
+                        "manual_distribution_required": True
+                    })
 
                     # Reset pool for the next period only when payout succeeded
                     pool_start_times[pool_id] = now
