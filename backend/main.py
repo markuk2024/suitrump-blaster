@@ -386,11 +386,11 @@ def _get_duration_override(env_name: str, default_seconds: int) -> int:
         return default_seconds
 
 
-# Pool durations (seconds)
+# Pool durations (seconds) - testing durations: 10min, 15min, 20min
 POOL_DURATIONS = {
-    "daily": _get_duration_override("POOL_DURATION_DAILY_SECONDS", 24 * 3600),
-    "weekly": _get_duration_override("POOL_DURATION_WEEKLY_SECONDS", 7 * 24 * 3600),
-    "monthly": _get_duration_override("POOL_DURATION_MONTHLY_SECONDS", 28 * 24 * 3600)
+    "daily": _get_duration_override("POOL_DURATION_DAILY_SECONDS", 10 * 60),  # 10 minutes
+    "weekly": _get_duration_override("POOL_DURATION_WEEKLY_SECONDS", 15 * 60),  # 15 minutes
+    "monthly": _get_duration_override("POOL_DURATION_MONTHLY_SECONDS", 20 * 60)  # 20 minutes
 }
 
 POOL_PAYOUTS = {

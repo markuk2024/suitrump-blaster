@@ -13,11 +13,11 @@ def _get_env(*names: str, default: str = "") -> str:
             return value
     return default
 
-# Pool Configuration
+# Pool Configuration - testing durations: 10min, 15min, 20min
 POOL_DURATIONS = {
-    "daily": 86400,      # 24 hours in seconds
-    "weekly": 604800,    # 7 days in seconds
-    "monthly": 2419200   # 28 days in seconds
+    "daily": 600,         # 10 minutes in seconds
+    "weekly": 900,       # 15 minutes in seconds
+    "monthly": 1200      # 20 minutes in seconds
 }
 
 POOL_PAYOUTS = {
