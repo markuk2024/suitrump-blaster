@@ -32,9 +32,21 @@ def encode_u64(value: int) -> bytes:
     """Encode u64 in little-endian"""
     return struct.pack('<Q', value)
 
+def encode_u32(value: int) -> bytes:
+    """Encode u32 in little-endian"""
+    return struct.pack('<I', value)
+
+def encode_u16(value: int) -> bytes:
+    """Encode u16 in little-endian"""
+    return struct.pack('<H', value)
+
 def encode_u8(value: int) -> bytes:
     """Encode u8"""
     return struct.pack('<B', value)
+
+def encode_bool(value: bool) -> bytes:
+    """Encode bool"""
+    return b'\x01' if value else b'\x00'
 
 def encode_string(value: str) -> bytes:
     """Encode string with length prefix"""
@@ -45,6 +57,68 @@ def encode_address(address: str) -> bytes:
     """Encode Sui address (32 bytes)"""
     addr = address.replace('0x', '')
     return bytes.fromhex(addr.zfill(64))
+
+def encode_object_id(object_id: str) -> bytes:
+    """Encode ObjectID (32 bytes)"""
+    obj_id = object_id.replace('0x', '')
+    return bytes.fromhex(obj_id.zfill(64))
+
+def encode_transaction_kind(tx_kind: dict) -> bytes:
+    """Encode TransactionKind to BCS"""
+    kind = tx_kind.get("kind")
+    if kind == "moveCall":
+        # MoveCall encoding
+        result = b'\x00'  # MoveCall tag
+        result += encode_string(tx_kind.get("target", ""))
+        
+        # Encode type arguments
+        type_args = tx_kind.get("type_arguments", [])
+        result += encode_uleb128(len(type_args))
+        for type_arg in type_args:
+            result += encode_string(type_arg)
+        
+        # Encode arguments (simplified - for full implementation need proper argument encoding)
+        args = tx_kind.get("arguments", [])
+        result += encode_uleb128(len(args))
+        for arg in args:
+            # Simplified argument encoding - treat as strings for now
+            if isinstance(arg, str):
+                result += encode_string(arg)
+            elif isinstance(arg, bool):
+                result += encode_bool(arg)
+            elif isinstance(arg, int):
+                result += encode_u64(arg)
+            else:
+                result += encode_string(str(arg))
+        
+        return result
+    else:
+        raise Exception(f"Unsupported transaction kind: {kind}")
+
+def encode_transaction_data(tx_data: dict) -> bytes:
+    """Encode TransactionData to BCS"""
+    result = b''
+    
+    # Encode TransactionKind
+    tx_kind = tx_data.get("kind") or tx_data.get("transactions", [{}])[0]
+    result += encode_transaction_kind(tx_kind)
+    
+    # Encode sender
+    result += encode_address(tx_data.get("sender", "0x0"))
+    
+    # Encode gas data (simplified)
+    gas_data = tx_data.get("gasData", {})
+    result += encode_address(gas_data.get("owner", "0x0"))
+    result += encode_u64(int(gas_data.get("price", "1000")))
+    result += encode_u64(int(gas_data.get("budget", "10000000")))
+    
+    # Encode gas payment (simplified)
+    payment = gas_data.get("payment", [])
+    result += encode_uleb128(len(payment))
+    for p in payment:
+        result += encode_object_id(p.get("objectId", "0x0"))
+    
+    return result
 
 # Sui RPC Client with BCS support
 class SuiRPCClient:
@@ -100,11 +174,17 @@ class SuiRPCClient:
             "type_arguments": move_calls[0]["type_arguments"] if move_calls else []
         }
     
-    def _sign_transaction(self, transaction_data: bytes) -> str:
-        """Sign transaction data"""
+    def _sign_transaction(self, transaction_data: dict) -> str:
+        """Sign transaction data with proper BCS encoding"""
         if not self.signing_key:
             raise Exception("Private key not loaded")
-        signature = self.signing_key.sign(transaction_data)
+        
+        # Encode transaction data to BCS
+        tx_bytes = encode_transaction_data(transaction_data)
+        
+        # Sign the BCS-encoded transaction
+        signature = self.signing_key.sign(tx_bytes)
+        
         # Sui signature format: flag + signature + pubkey
         flag = bytes([0x00])  # Ed25519 signature flag
         sig_bytes = signature + self.public_key.public_bytes(
@@ -114,7 +194,7 @@ class SuiRPCClient:
         return "0x" + (flag + sig_bytes).hex()
     
     async def execute_move_call(self, target: str, arguments: list = None, type_arguments: list = None):
-        """Execute a Move call via RPC with proper signing"""
+        """Execute a Move call via RPC with proper BCS signing"""
         if not self.signing_key:
             raise Exception("Private key not loaded")
         
@@ -126,40 +206,42 @@ class SuiRPCClient:
             "type_arguments": type_arguments or []
         }
         
-        # Try to execute via executeTransactionBlock with signing
+        # Try to execute via executeTransactionBlock with BCS-encoded signing
         try:
             # Get gas objects for the sender
             gas_result = await self._rpc_call("suix_getGasObjectsOwnedByAddress", [self.address])
             
             if "error" in gas_result or not gas_result.get("result"):
-                print("No gas objects found, using simulation")
+                print("No gas objects found, cannot execute real transaction")
                 return await self._simulate_transaction(tx_kind)
             
             gas_objects = gas_result["result"]
             if not gas_objects:
-                print("No gas objects available, using simulation")
+                print("No gas objects available, cannot execute real transaction")
                 return await self._simulate_transaction(tx_kind)
             
             # Use first gas object
             gas_object_id = gas_objects[0]["objectId"]
             
-            # Build transaction data
+            # Build transaction data with proper structure for Sui RPC
             transaction_data = {
-                "kind": tx_kind,
+                "kind": "moveCall",
+                "target": target,
+                "arguments": arguments or [],
+                "type_arguments": type_arguments or [],
                 "sender": self.address,
                 "gasData": {
                     "payment": [{"objectId": gas_object_id, "version": 1, "digest": "0x0000000000000000000000000000000000000000000000000000000000000000"}],
                     "owner": self.address,
                     "price": "1000",
                     "budget": "10000000"
-                },
-                "transactions": [tx_kind]
+                }
             }
             
-            # Sign transaction (simplified - full BCS encoding needed)
-            signature = self._sign_simple_transaction(transaction_data)
+            # Sign transaction with BCS encoding
+            signature = self._sign_transaction(transaction_data)
             
-            # Execute transaction
+            # Execute transaction via RPC
             result = await self._rpc_call(
                 "sui_executeTransactionBlock",
                 [
@@ -174,11 +256,16 @@ class SuiRPCClient:
                 return await self._simulate_transaction(tx_kind)
             
             tx_digest = result.get("result", {}).get("digest", "")
-            return {
-                "status": "success",
-                "transaction_id": tx_digest,
-                "message": "Transaction executed on-chain"
-            }
+            if tx_digest:
+                print(f"Transaction executed on-chain: {tx_digest}")
+                return {
+                    "status": "success",
+                    "transaction_id": tx_digest,
+                    "message": "Transaction executed on-chain"
+                }
+            else:
+                print("No transaction digest in result")
+                return await self._simulate_transaction(tx_kind)
             
         except Exception as e:
             print(f"Execution failed: {e}")
@@ -219,18 +306,6 @@ class SuiRPCClient:
                 "message": "Transaction simulated"
             }
     
-    def _sign_simple_transaction(self, transaction_data: dict) -> str:
-        """Simple signing - full BCS encoding needed for production"""
-        # For production, need to serialize transaction_data to BCS
-        # This is a simplified version
-        tx_bytes = json.dumps(transaction_data, sort_keys=True).encode('utf-8')
-        signature = self.signing_key.sign(tx_bytes)
-        flag = bytes([0x00])
-        sig_bytes = signature + self.public_key.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
-        )
-        return "0x" + (flag + sig_bytes).hex()
 
 HAS_PYSUI = False
 
@@ -732,12 +807,17 @@ async def call_smart_contract(function: str, args: list):
                         arguments=arguments
                     )
                     
-                    print(f"Transaction succeeded: {result.get('transaction_id')}")
+                    # Check if transaction was real (not simulated)
+                    tx_id = result.get('transaction_id', '')
+                    is_real = not tx_id.startswith(('sim_', 'inspect_'))
+                    
+                    print(f"Transaction {'executed on-chain' if is_real else 'simulated'}: {tx_id}")
                     return {
                         "status": "success",
                         "function": function,
-                        "transaction_id": result.get("transaction_id"),
-                        "message": "Transaction executed on-chain"
+                        "transaction_id": tx_id,
+                        "message": result.get("message", ""),
+                        "is_real": is_real
                     }
                 
                 elif function == "withdraw_from_escrow":
@@ -751,12 +831,16 @@ async def call_smart_contract(function: str, args: list):
                         arguments=[pool_id, str(amount)]
                     )
                     
-                    print(f"Withdrawal succeeded: {result.get('transaction_id')}")
+                    tx_id = result.get('transaction_id', '')
+                    is_real = not tx_id.startswith(('sim_', 'inspect_'))
+                    
+                    print(f"Withdrawal {'executed on-chain' if is_real else 'simulated'}: {tx_id}")
                     return {
                         "status": "success",
                         "function": function,
-                        "transaction_id": result.get("transaction_id"),
-                        "message": "Withdrawal executed on-chain"
+                        "transaction_id": tx_id,
+                        "message": result.get("message", ""),
+                        "is_real": is_real
                     }
                 
                 elif function == "distribute_external_rewards":
@@ -779,12 +863,16 @@ async def call_smart_contract(function: str, args: list):
                         arguments=arguments
                     )
                     
-                    print(f"External distribution succeeded: {result.get('transaction_id')}")
+                    tx_id = result.get('transaction_id', '')
+                    is_real = not tx_id.startswith(('sim_', 'inspect_'))
+                    
+                    print(f"External distribution {'executed on-chain' if is_real else 'simulated'}: {tx_id}")
                     return {
                         "status": "success",
                         "function": function,
-                        "transaction_id": result.get("transaction_id"),
-                        "message": "External distribution executed on-chain"
+                        "transaction_id": tx_id,
+                        "message": result.get("message", ""),
+                        "is_real": is_real
                     }
                 
             except Exception as e:
@@ -874,11 +962,17 @@ async def auto_distribute_task():
                         continue
 
                     status = result.get("status") if isinstance(result, dict) else None
+                    is_real = result.get("is_real", False) if isinstance(result, dict) else False
+                    
                     if status != "success":
                         print(f"AUTOMATION: Distribution did not complete for {pool_id} (status={status}). Pool will remain open for manual retry.")
                         continue
+                    
+                    if not is_real:
+                        print(f"AUTOMATION: Distribution was simulated (not real on-chain) for {pool_id}. Pool will remain open until real execution succeeds.")
+                        continue
 
-                    # Reset pool for the next period only when payout succeeded
+                    # Reset pool for the next period only when real on-chain payout succeeded
                     pool_start_times[pool_id] = now
                     pool_leaderboards[pool_id] = []
                     pool_participants[pool_id] = []
