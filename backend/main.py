@@ -40,12 +40,30 @@ def decode_sui_private_key(encoded_key: str) -> bytes:
             
             # Convert from 5-bit to 8-bit
             data_bytes = bech32.convertbits(data, 5, 8, False)
-            return bytes(data_bytes)
+            result = bytes(data_bytes)
+            
+            # Sui keys might have a prefix byte - try stripping first byte if length > 32
+            if len(result) == 33:
+                print(f"Decoded key is 33 bytes, stripping first byte (0x{result[0]:02x})")
+                result = result[1:]
+            elif len(result) > 32:
+                print(f"Decoded key is {len(result)} bytes, truncating to 32")
+                result = result[:32]
+            
+            return result
         else:
             # Fallback to custom implementation
             hrp, data = bech32_decode(encoded_key)
             data_bytes = convert_bits(data, 5, 8, pad=False)
-            return bytes(data_bytes)
+            result = bytes(data_bytes)
+            
+            if len(result) == 33:
+                print(f"Decoded key is 33 bytes, stripping first byte")
+                result = result[1:]
+            elif len(result) > 32:
+                result = result[:32]
+            
+            return result
     except Exception as e:
         print(f"Failed to decode Sui key: {e}")
         return None
@@ -275,20 +293,20 @@ class SuiRPCClient:
         
         # Try to execute via executeTransactionBlock with BCS-encoded signing
         try:
-            # Get gas objects for the sender
-            gas_result = await self._rpc_call("suix_getGasObjectsOwnedByAddress", [self.address])
+            # Get gas objects for the sender - use correct RPC method
+            gas_result = await self._rpc_call("suix_getCoins", [self.address, None, 10])
             
-            if "error" in gas_result or not gas_result.get("result"):
-                print("No gas objects found, cannot execute real transaction")
+            if "error" in gas_result:
+                print(f"RPC Error getting coins: {gas_result['error']}")
                 return await self._simulate_transaction(tx_kind)
             
-            gas_objects = gas_result["result"]
+            gas_objects = gas_result.get("data", [])
             if not gas_objects:
-                print("No gas objects available, cannot execute real transaction")
+                print(f"No gas objects found for address {self.address}")
                 return await self._simulate_transaction(tx_kind)
             
             # Use first gas object
-            gas_object_id = gas_objects[0]["objectId"]
+            gas_object_id = gas_objects[0]["coinObjectId"]
             
             # Build transaction data with proper structure for Sui RPC
             transaction_data = {
@@ -298,7 +316,7 @@ class SuiRPCClient:
                 "type_arguments": type_arguments or [],
                 "sender": self.address,
                 "gasData": {
-                    "payment": [{"objectId": gas_object_id, "version": 1, "digest": "0x0000000000000000000000000000000000000000000000000000000000000000"}],
+                    "payment": [{"objectId": gas_object_id, "version": gas_objects[0].get("version", 1), "digest": gas_objects[0].get("digest", "0x0000000000000000000000000000000000000000000000000000000000000000")}],
                     "owner": self.address,
                     "price": "1000",
                     "budget": "10000000"
