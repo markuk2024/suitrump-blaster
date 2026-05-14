@@ -63,6 +63,9 @@ class Config:
     SUITRUMP_TOKEN_MODULE: str = os.getenv("SUITRUMP_TOKEN_MODULE", "suitrump")
     SUITRUMP_TOKEN_NAME: str = os.getenv("SUITRUMP_TOKEN_NAME", "SUITRUMP")
     
+    # Cetus Configuration
+    CETUS_SUI_SUITRUMP_POOL_ID: str = os.getenv("CETUS_SUI_SUITRUMP_POOL_ID", "0x2c2bbe5623c66e9ddf39185d3ab5528493c904b89c415df991aeed73c2427aa9")
+    
     # Real On-chain Pool Object IDs
     DAILY_POOL_ID: str = os.getenv("DAILY_POOL_ID", "0x478672bbf8512f9403d029df4adb5e1e386bd9d23ff318e14f47136035df5597")
     WEEKLY_POOL_ID: str = os.getenv("WEEKLY_POOL_ID", "0x73704b5dcf1fba6c7cfec523bff2e8d3b6f6e4ae24a4d87a14bc75e72d21417d")
