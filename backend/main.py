@@ -160,6 +160,11 @@ def _migrate_participants(participants):
 def get_pool_wallets(pool_id):
     """Extract wallet addresses from participant records"""
     participants = pool_participants.get(pool_id, [])
+    # Ensure participants is a list
+    if not isinstance(participants, list):
+        print(f"WARNING: pool_participants[{pool_id}] is not a list, resetting to empty list")
+        pool_participants[pool_id] = []
+        participants = []
     wallets = []
     for p in participants:
         if isinstance(p, str):
