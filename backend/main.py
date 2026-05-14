@@ -905,6 +905,21 @@ async def join_pool(data: PoolJoin):
         if data.wallet in get_pool_wallets(data.pool_id):
             return {"status": "success", "message": "Already joined this pool", "pool": pool_data[data.pool_id]}
         
+        # Ensure pool_participants[data.pool_id] is a list
+        if data.pool_id not in pool_participants or not isinstance(pool_participants[data.pool_id], list):
+            print(f"WARNING: pool_participants[{data.pool_id}] is not initialized or not a list, initializing")
+            pool_participants[data.pool_id] = []
+        
+        # Ensure pool_data[data.pool_id] is a dict with players field
+        if not isinstance(pool_data[data.pool_id], dict):
+            print(f"WARNING: pool_data[{data.pool_id}] is not a dict, reinitializing")
+            pool_data[data.pool_id] = {
+                "contract_id": pool_data[data.pool_id] if isinstance(pool_data[data.pool_id], str) else "",
+                "entry_fee": 2_000_000_000,
+                "duration": 86400,
+                "players": 0
+            }
+        
         # Determine expected entry fee in MIST
         pool_entry_fee = pool_data[data.pool_id].get("entry_fee", str(config.POOL_ENTRY_FEE / 1_000_000_000))
         expected_entry_fee = _parse_entry_fee_to_mist(pool_entry_fee)
@@ -983,6 +998,8 @@ async def join_pool(data: PoolJoin):
         raise
     except Exception as e:
         print(f"Error in join_pool: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "status": "error",
             "message": f"Error joining pool: {str(e)}"
