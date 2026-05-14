@@ -15,14 +15,21 @@ import httpx
 try:
     from pysui import SuiConfig, SyncClient, handle_result, ObjectID
     try:
-        from pysui.sui.sui_types.address import SuiAddress
-        from pysui.sui.sui_types.scalars import SuiString, SuiU64, SuiU128, SuiBool
-        from pysui.sui.sui_types.collections import SuiArray
-    except ImportError:
-        # Fall back to legacy module path (pysui < 0.95)
+        # Try newer pysui import paths
         from pysui.sui_types.address import SuiAddress
         from pysui.sui_types.scalars import SuiString, SuiU64, SuiU128, SuiBool
         from pysui.sui_types.collections import SuiArray
+    except ImportError:
+        try:
+            # Try older pysui import paths
+            from pysui.sui.sui_types.address import SuiAddress
+            from pysui.sui.sui_types.scalars import SuiString, SuiU64, SuiU128, SuiBool
+            from pysui.sui.sui_types.collections import SuiArray
+        except ImportError:
+            # Try without sui_types prefix
+            from pysui.address import SuiAddress
+            from pysui.scalars import SuiString, SuiU64, SuiU128, SuiBool
+            from pysui.collections import SuiArray
     HAS_PYSUI = True
 except ImportError as e:
     print(f"pysui import failed ({e}) - using simulation mode")
