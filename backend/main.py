@@ -19,83 +19,33 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
 # Bech32 decoding for Sui keys
+try:
+    import bech32
+    HAS_BECH32 = True
+except ImportError:
+    HAS_BECH32 = False
+    print("bech32 library not available, custom decoding will be used")
+
 CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 BECH32M_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
-
-def bech32_decode(encoded: str):
-    """Decode bech32 string"""
-    encoded = encoded.lower()
-    if not all(c in CHARSET for c in encoded):
-        raise ValueError("Invalid characters in bech32 string")
-    
-    # Separate human-readable part and data
-    sep = encoded.rfind('1')
-    if sep == -1:
-        raise ValueError("No separator found")
-    
-    hrp = encoded[:sep]
-    data = encoded[sep+1:]
-    
-    # Convert to 5-bit integers
-    values = []
-    for char in data:
-        values.append(CHARSET.index(char))
-    
-    # Verify checksum
-    hrp_expanded = [ord(c) >> 5 for c in hrp] + [0] + [ord(c) & 31 for c in hrp]
-    combined = hrp_expanded + values
-    checksum = bech32_polymod(combined)
-    
-    if checksum != 1:
-        raise ValueError("Invalid checksum")
-    
-    # Remove checksum (6 characters)
-    values = values[:-6]
-    
-    return hrp, values
-
-def bech32_polymod(values):
-    """Calculate bech32 checksum"""
-    generator = [0x3b6a57b2, 0x3c6ef372, 0x335e3f5f, 0x27f691b5, 0x1b048253, 0x189b965c, 0x0e4986e5, 0x0616a63b, 0x0d3b3a65, 0x0a7db07a, 0x0784ce5d, 0x05550bd7, 0x02a6e57c, 0x029c8488, 0x057c3b5d, 0x02e55d8a, 0x0382f632, 0x090afb88, 0x06a2a5a8, 0x044f725d, 0x0226f21f, 0x02ab6863, 0x0236b82c, 0x0336a1be, 0x02d9923b, 0x029a2847, 0x078c798d, 0x0268d38d, 0x02f76fc4, 0x055f19a0, 0x07a0c1e8, 0x041c8cc1, 0x077cd954, 0x03b66318, 0x0720f47d, 0x0b8ed599, 0x04be7e36, 0x09f274f3, 0x06cf2ce9, 0x0118c5d8, 0x0169f8e5, 0x0453b852, 0x0506b795, 0x038a19f7, 0x05461981, 0x06de5bc1, 0x06d4b945, 0x05c6775c, 0x062c1e8a, 0x07d3b059, 0x05d66c8c, 0x054c86a8, 0x047c1e9e, 0x07325d67, 0x04b857a7, 0x0716892c, 0x05a3c2e9, 0x0685959b, 0x05f5a6c6, 0x078c60a9, 0x043d2dd8, 0x0645e767, 0x0709d990, 0x0554f9c3, 0x066639ea, 0x064c6352, 0x062c2956, 0x062c6238, 0x062c6238]
-    
-    chk = 1
-    for v in values:
-        b = (chk >> 25)
-        if b >= 32:
-            b -= 32
-        chk = (chk & 0x1ffffff) << 5 ^ v ^ generator[b]
-    
-    return chk ^ 1
-
-def convert_bits(data, from_bits, to_bits, pad=True):
-    """Convert between bit representations"""
-    acc = 0
-    bits = 0
-    result = []
-    
-    for value in data:
-        acc = (acc << from_bits) | value
-        bits += from_bits
-        
-        while bits >= to_bits:
-            bits -= to_bits
-            result.append((acc >> bits) & ((1 << to_bits) - 1))
-    
-    if pad and bits > 0:
-        result.append((acc << (to_bits - bits)) & ((1 << to_bits) - 1))
-    
-    return result
 
 def decode_sui_private_key(encoded_key: str) -> bytes:
     """Decode Sui private key from bech32 format"""
     try:
-        hrp, data = bech32_decode(encoded_key)
-        
-        # Convert from 5-bit to 8-bit
-        data_bytes = convert_bits(data, 5, 8, pad=False)
-        
-        # Convert to bytes
-        return bytes(data_bytes)
+        if HAS_BECH32:
+            # Use bech32 library
+            hrp, data = bech32.bech32_decode(encoded_key)
+            if hrp is None:
+                raise ValueError("Invalid bech32 string")
+            
+            # Convert from 5-bit to 8-bit
+            data_bytes = bech32.convertbits(data, 5, 8, False)
+            return bytes(data_bytes)
+        else:
+            # Fallback to custom implementation
+            hrp, data = bech32_decode(encoded_key)
+            data_bytes = convert_bits(data, 5, 8, pad=False)
+            return bytes(data_bytes)
     except Exception as e:
         print(f"Failed to decode Sui key: {e}")
         return None
