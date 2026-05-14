@@ -42,13 +42,39 @@ def decode_sui_private_key(encoded_key: str) -> bytes:
             data_bytes = bech32.convertbits(data, 5, 8, False)
             result = bytes(data_bytes)
             
-            # Sui keys might have a prefix byte - try stripping first byte if length > 32
+            # Sui keys might have a prefix byte - try different approaches
             if len(result) == 33:
-                print(f"Decoded key is 33 bytes, stripping first byte (0x{result[0]:02x})")
-                result = result[1:]
+                print(f"Decoded key is 33 bytes, trying different approaches")
+                # Try using last 32 bytes instead of first
+                result_last = result[1:]
+                result_first = result[:-1]
+                
+                # Derive addresses for both approaches
+                try:
+                    test_key = ed25519.Ed25519PrivateKey.from_private_bytes(result_last)
+                    test_pub = test_key.public_key().public_bytes(
+                        encoding=serialization.Encoding.Raw,
+                        format=serialization.PublicFormat.Raw
+                    )
+                    test_addr = "0x" + hashlib.blake2b(test_pub, digest_size=32).hexdigest()
+                    print(f"Using last 32 bytes gives address: {test_addr}")
+                    result = result_last
+                except:
+                    try:
+                        test_key = ed25519.Ed25519PrivateKey.from_private_bytes(result_first)
+                        test_pub = test_key.public_key().public_bytes(
+                            encoding=serialization.Encoding.Raw,
+                            format=serialization.PublicFormat.Raw
+                        )
+                        test_addr = "0x" + hashlib.blake2b(test_pub, digest_size=32).hexdigest()
+                        print(f"Using first 32 bytes gives address: {test_addr}")
+                        result = result_first
+                    except:
+                        print("Both approaches failed, using last 32 bytes")
+                        result = result_last
             elif len(result) > 32:
-                print(f"Decoded key is {len(result)} bytes, truncating to 32")
-                result = result[:32]
+                print(f"Decoded key is {len(result)} bytes, using last 32 bytes")
+                result = result[-32:]
             
             return result
         else:
@@ -58,10 +84,9 @@ def decode_sui_private_key(encoded_key: str) -> bytes:
             result = bytes(data_bytes)
             
             if len(result) == 33:
-                print(f"Decoded key is 33 bytes, stripping first byte")
                 result = result[1:]
             elif len(result) > 32:
-                result = result[:32]
+                result = result[-32:]
             
             return result
     except Exception as e:
