@@ -15,6 +15,7 @@ import httpx
 try:
     from pysui import SuiConfig, SyncClient, handle_result, ObjectID
     HAS_PYSUI = True
+    print("pysui core imports successful")
 except ImportError as e:
     print(f"pysui import failed ({e}) - using simulation mode")
     HAS_PYSUI = False
