@@ -530,23 +530,26 @@ async def call_smart_contract(function: str, args: list):
                     pool_id = args[0] if len(args) > 0 else "0x0"
                     winners = args[1] if len(args) > 1 else []
                     
-                    # Separate into parallel vectors for new Move contract signature
-                    winner_addrs_list = [SuiAddress(w[0]) for w in winners]
-                    winner_amounts_list = [SuiU64(int(w[1])) for w in winners]
+                    # Build transaction using pysui 0.58.0 API
+                    from pysui.sui.sui_builders import TransactionBuilder
+                    tx = TransactionBuilder(cfg)
                     
-                    winner_addrs = SuiArray(winner_addrs_list)
-                    winner_amounts = SuiArray(winner_amounts_list)
-                    
-                    # Build transaction using the correct pysui API
-                    tx_builder = client.get_move_call_tx_builder(
+                    # Add move call
+                    tx.move_call(
                         target=f"{config.PACKAGE_ID}::pool::distribute_rewards",
-                        arguments=[ObjectID(pool_id), winner_addrs, winner_amounts]
+                        arguments=[
+                            tx.object(pool_id),
+                            tx.pure.address(w[0]) for w in winners
+                        ] + [tx.pure.u64(int(w[1])) for w in winners]
                     )
                     
                     # Execute the transaction
-                    result = client.execute_tx(tx_builder)
-                    result = handle_result(result)
-                    tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                    result = client.sign_and_execute_transaction_block(
+                        transaction_block=tx,
+                        signer=client.signers[0]
+                    )
+                    
+                    tx_digest = result.digest if hasattr(result, 'digest') else str(result)
                     
                     print(f"Transaction succeeded: {tx_digest}")
                     return {
@@ -570,25 +573,31 @@ async def call_smart_contract(function: str, args: list):
                     cetus_package = "0x1eabed72c53feb3805120a081dc15963c204dc8d091542592abaf7a35689b2fb"
                     suitrump_type = "0xdeb831e796f16f8257681c0d5d4108fa94333060300b2459133a96631bf470b8::suitrump::SUITRUMP"
                     
-                    # Build Cetus swap transaction
-                    tx_builder = client.get_move_call_tx_builder(
+                    # Build Cetus swap transaction using pysui 0.58.0 API
+                    from pysui.sui.sui_builders import TransactionBuilder
+                    tx = TransactionBuilder(cfg)
+                    
+                    tx.move_call(
                         target=f"{cetus_package}::pool_script::swap",
                         type_arguments=["0x2::sui::SUI", suitrump_type],
                         arguments=[
-                            ObjectID(pool_address),
-                            SuiBool(a_to_b),
-                            SuiBool(by_amount_in),
-                            SuiU64(amount),
-                            SuiU64(amount_limit),
-                            SuiU128(sqrt_price_limit),
-                            SuiString(partner)
+                            tx.object(pool_address),
+                            tx.pure.bool(a_to_b),
+                            tx.pure.bool(by_amount_in),
+                            tx.pure.u64(amount),
+                            tx.pure.u64(amount_limit),
+                            tx.pure.u128(sqrt_price_limit),
+                            tx.pure.string(partner)
                         ]
                     )
                     
                     # Execute the transaction
-                    result = client.execute_tx(tx_builder)
-                    result = handle_result(result)
-                    tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                    result = client.sign_and_execute_transaction_block(
+                        transaction_block=tx,
+                        signer=client.signers[0]
+                    )
+                    
+                    tx_digest = result.digest if hasattr(result, 'digest') else str(result)
                     
                     print(f"Cetus swap succeeded: {tx_digest}")
                     return {
@@ -603,24 +612,27 @@ async def call_smart_contract(function: str, args: list):
                     coin_id = args[1] if len(args) > 1 else "0x0"
                     winners = args[2] if len(args) > 2 else []
                     
-                    # Separate into parallel vectors
-                    winner_addrs_list = [SuiAddress(w[0]) for w in winners]
-                    winner_amounts_list = [SuiU64(int(w[1])) for w in winners]
+                    # Build transaction using pysui 0.58.0 API
+                    from pysui.sui.sui_builders import TransactionBuilder
+                    tx = TransactionBuilder(cfg)
                     
-                    winner_addrs = SuiArray(winner_addrs_list)
-                    winner_amounts = SuiArray(winner_amounts_list)
-                    
-                    # Build transaction to distribute external rewards with SUITRUMP type
-                    tx_builder = client.get_move_call_tx_builder(
+                    # Add move call
+                    tx.move_call(
                         target=f"{config.PACKAGE_ID}::pool::distribute_external_rewards",
                         type_arguments=[config.SUITRUMP_TYPE],
-                        arguments=[ObjectID(pool_id), ObjectID(coin_id), winner_addrs, winner_amounts]
+                        arguments=[
+                            tx.object(pool_id),
+                            tx.object(coin_id)
+                        ] + [tx.pure.address(w[0]) for w in winners] + [tx.pure.u64(int(w[1])) for w in winners]
                     )
                     
                     # Execute the transaction
-                    result = client.execute_tx(tx_builder)
-                    result = handle_result(result)
-                    tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                    result = client.sign_and_execute_transaction_block(
+                        transaction_block=tx,
+                        signer=client.signers[0]
+                    )
+                    
+                    tx_digest = result.digest if hasattr(result, 'digest') else str(result)
                     
                     print(f"External distribution succeeded: {tx_digest}")
                     return {
@@ -634,16 +646,23 @@ async def call_smart_contract(function: str, args: list):
                     pool_id = args[0] if len(args) > 0 else "0x0"
                     amount = args[1] if len(args) > 1 else 0
                     
-                    # Build transaction to withdraw from escrow
-                    tx_builder = client.get_move_call_tx_builder(
+                    # Build transaction using pysui 0.58.0 API
+                    from pysui.sui.sui_builders import TransactionBuilder
+                    tx = TransactionBuilder(cfg)
+                    
+                    # Add move call
+                    tx.move_call(
                         target=f"{config.PACKAGE_ID}::pool::withdraw_from_escrow",
-                        arguments=[ObjectID(pool_id), SuiU64(amount)]
+                        arguments=[tx.object(pool_id), tx.pure.u64(amount)]
                     )
                     
                     # Execute the transaction
-                    result = client.execute_tx(tx_builder)
-                    result = handle_result(result)
-                    tx_digest = result.transaction_digest if hasattr(result, 'transaction_digest') else str(result)
+                    result = client.sign_and_execute_transaction_block(
+                        transaction_block=tx,
+                        signer=client.signers[0]
+                    )
+                    
+                    tx_digest = result.digest if hasattr(result, 'digest') else str(result)
                     
                     print(f"Withdrawal succeeded: {tx_digest}")
                     return {
