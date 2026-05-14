@@ -534,13 +534,17 @@ async def call_smart_contract(function: str, args: list):
                     from pysui.sui.sui_builders import TransactionBuilder
                     tx = TransactionBuilder(cfg)
                     
+                    # Build arguments list
+                    arguments = [tx.object(pool_id)]
+                    for w in winners:
+                        arguments.append(tx.pure.address(w[0]))
+                    for w in winners:
+                        arguments.append(tx.pure.u64(int(w[1])))
+                    
                     # Add move call
                     tx.move_call(
                         target=f"{config.PACKAGE_ID}::pool::distribute_rewards",
-                        arguments=[
-                            tx.object(pool_id),
-                            tx.pure.address(w[0]) for w in winners
-                        ] + [tx.pure.u64(int(w[1])) for w in winners]
+                        arguments=arguments
                     )
                     
                     # Execute the transaction
@@ -616,14 +620,18 @@ async def call_smart_contract(function: str, args: list):
                     from pysui.sui.sui_builders import TransactionBuilder
                     tx = TransactionBuilder(cfg)
                     
+                    # Build arguments list
+                    arguments = [tx.object(pool_id), tx.object(coin_id)]
+                    for w in winners:
+                        arguments.append(tx.pure.address(w[0]))
+                    for w in winners:
+                        arguments.append(tx.pure.u64(int(w[1])))
+                    
                     # Add move call
                     tx.move_call(
                         target=f"{config.PACKAGE_ID}::pool::distribute_external_rewards",
                         type_arguments=[config.SUITRUMP_TYPE],
-                        arguments=[
-                            tx.object(pool_id),
-                            tx.object(coin_id)
-                        ] + [tx.pure.address(w[0]) for w in winners] + [tx.pure.u64(int(w[1])) for w in winners]
+                        arguments=arguments
                     )
                     
                     # Execute the transaction
