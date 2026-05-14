@@ -50,28 +50,34 @@ def decode_sui_private_key(encoded_key: str) -> bytes:
                 result_first = result[:-1]
                 
                 # Derive addresses for both approaches
+                addr_last = None
+                addr_first = None
+                
                 try:
                     test_key = ed25519.Ed25519PrivateKey.from_private_bytes(result_last)
                     test_pub = test_key.public_key().public_bytes(
                         encoding=serialization.Encoding.Raw,
                         format=serialization.PublicFormat.Raw
                     )
-                    test_addr = "0x" + hashlib.blake2b(test_pub, digest_size=32).hexdigest()
-                    print(f"Using last 32 bytes gives address: {test_addr}")
-                    result = result_last
-                except:
-                    try:
-                        test_key = ed25519.Ed25519PrivateKey.from_private_bytes(result_first)
-                        test_pub = test_key.public_key().public_bytes(
-                            encoding=serialization.Encoding.Raw,
-                            format=serialization.PublicFormat.Raw
-                        )
-                        test_addr = "0x" + hashlib.blake2b(test_pub, digest_size=32).hexdigest()
-                        print(f"Using first 32 bytes gives address: {test_addr}")
-                        result = result_first
-                    except:
-                        print("Both approaches failed, using last 32 bytes")
-                        result = result_last
+                    addr_last = "0x" + hashlib.blake2b(test_pub, digest_size=32).hexdigest()
+                    print(f"Stripping first byte gives address: {addr_last}")
+                except Exception as e:
+                    print(f"Failed with last 32 bytes: {e}")
+                
+                try:
+                    test_key = ed25519.Ed25519PrivateKey.from_private_bytes(result_first)
+                    test_pub = test_key.public_key().public_bytes(
+                        encoding=serialization.Encoding.Raw,
+                        format=serialization.PublicFormat.Raw
+                    )
+                    addr_first = "0x" + hashlib.blake2b(test_pub, digest_size=32).hexdigest()
+                    print(f"Stripping last byte gives address: {addr_first}")
+                except Exception as e:
+                    print(f"Failed with first 32 bytes: {e}")
+                
+                # Use last 32 bytes by default (most common)
+                result = result_last
+                print(f"Using last 32 bytes (stripping first byte)")
             elif len(result) > 32:
                 print(f"Decoded key is {len(result)} bytes, using last 32 bytes")
                 result = result[-32:]
@@ -319,7 +325,7 @@ class SuiRPCClient:
         # Try to execute via executeTransactionBlock with BCS-encoded signing
         try:
             # Get gas objects for the sender - use correct RPC method
-            gas_result = await self._rpc_call("suix_getCoins", [self.address, None, "10"])
+            gas_result = await self._rpc_call("suix_getCoins", [self.address, None, None])
             
             if "error" in gas_result:
                 print(f"RPC Error getting coins: {gas_result['error']}")
