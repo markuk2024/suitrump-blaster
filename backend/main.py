@@ -14,26 +14,31 @@ import httpx
 # Sui Imports
 try:
     from pysui import SuiConfig, SyncClient, handle_result, ObjectID
+    HAS_PYSUI = True
+except ImportError as e:
+    print(f"pysui import failed ({e}) - using simulation mode")
+    HAS_PYSUI = False
+
+# Try to import sui_types if pysui is available
+SuiAddress = None
+SuiString = None
+SuiU64 = None
+SuiU128 = None
+SuiBool = None
+SuiArray = None
+
+if HAS_PYSUI:
     try:
-        # Try newer pysui import paths
         from pysui.sui_types.address import SuiAddress
         from pysui.sui_types.scalars import SuiString, SuiU64, SuiU128, SuiBool
         from pysui.sui_types.collections import SuiArray
     except ImportError:
         try:
-            # Try older pysui import paths
             from pysui.sui.sui_types.address import SuiAddress
             from pysui.sui.sui_types.scalars import SuiString, SuiU64, SuiU128, SuiBool
             from pysui.sui.sui_types.collections import SuiArray
         except ImportError:
-            # Try without sui_types prefix
-            from pysui.address import SuiAddress
-            from pysui.scalars import SuiString, SuiU64, SuiU128, SuiBool
-            from pysui.collections import SuiArray
-    HAS_PYSUI = True
-except ImportError as e:
-    print(f"pysui import failed ({e}) - using simulation mode")
-    HAS_PYSUI = False
+            print("WARNING: pysui sui_types not available - some features may be limited")
 
 
 app = FastAPI(title="SuiTrump Blaster Backend")
