@@ -18,6 +18,88 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
+# Bech32 decoding for Sui keys
+CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+BECH32M_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+def bech32_decode(encoded: str):
+    """Decode bech32 string"""
+    encoded = encoded.lower()
+    if not all(c in CHARSET for c in encoded):
+        raise ValueError("Invalid characters in bech32 string")
+    
+    # Separate human-readable part and data
+    sep = encoded.rfind('1')
+    if sep == -1:
+        raise ValueError("No separator found")
+    
+    hrp = encoded[:sep]
+    data = encoded[sep+1:]
+    
+    # Convert to 5-bit integers
+    values = []
+    for char in data:
+        values.append(CHARSET.index(char))
+    
+    # Verify checksum
+    hrp_expanded = [ord(c) >> 5 for c in hrp] + [0] + [ord(c) & 31 for c in hrp]
+    combined = hrp_expanded + values
+    checksum = bech32_polymod(combined)
+    
+    if checksum != 1:
+        raise ValueError("Invalid checksum")
+    
+    # Remove checksum (6 characters)
+    values = values[:-6]
+    
+    return hrp, values
+
+def bech32_polymod(values):
+    """Calculate bech32 checksum"""
+    generator = [0x3b6a57b2, 0x3c6ef372, 0x335e3f5f, 0x27f691b5, 0x1b048253, 0x189b965c, 0x0e4986e5, 0x0616a63b, 0x0d3b3a65, 0x0a7db07a, 0x0784ce5d, 0x05550bd7, 0x02a6e57c, 0x029c8488, 0x057c3b5d, 0x02e55d8a, 0x0382f632, 0x090afb88, 0x06a2a5a8, 0x044f725d, 0x0226f21f, 0x02ab6863, 0x0236b82c, 0x0336a1be, 0x02d9923b, 0x029a2847, 0x078c798d, 0x0268d38d, 0x02f76fc4, 0x055f19a0, 0x07a0c1e8, 0x041c8cc1, 0x077cd954, 0x03b66318, 0x0720f47d, 0x0b8ed599, 0x04be7e36, 0x09f274f3, 0x06cf2ce9, 0x0118c5d8, 0x0169f8e5, 0x0453b852, 0x0506b795, 0x038a19f7, 0x05461981, 0x06de5bc1, 0x06d4b945, 0x05c6775c, 0x062c1e8a, 0x07d3b059, 0x05d66c8c, 0x054c86a8, 0x047c1e9e, 0x07325d67, 0x04b857a7, 0x0716892c, 0x05a3c2e9, 0x0685959b, 0x05f5a6c6, 0x078c60a9, 0x043d2dd8, 0x0645e767, 0x0709d990, 0x0554f9c3, 0x066639ea, 0x064c6352, 0x062c2956, 0x062c6238, 0x062c6238]
+    
+    chk = 1
+    for v in values:
+        b = (chk >> 25)
+        if b >= 32:
+            b -= 32
+        chk = (chk & 0x1ffffff) << 5 ^ v ^ generator[b]
+    
+    return chk ^ 1
+
+def convert_bits(data, from_bits, to_bits, pad=True):
+    """Convert between bit representations"""
+    acc = 0
+    bits = 0
+    result = []
+    
+    for value in data:
+        acc = (acc << from_bits) | value
+        bits += from_bits
+        
+        while bits >= to_bits:
+            bits -= to_bits
+            result.append((acc >> bits) & ((1 << to_bits) - 1))
+    
+    if pad and bits > 0:
+        result.append((acc << (to_bits - bits)) & ((1 << to_bits) - 1))
+    
+    return result
+
+def decode_sui_private_key(encoded_key: str) -> bytes:
+    """Decode Sui private key from bech32 format"""
+    try:
+        hrp, data = bech32_decode(encoded_key)
+        
+        # Convert from 5-bit to 8-bit
+        data_bytes = convert_bits(data, 5, 8, pad=False)
+        
+        # Convert to bytes
+        return bytes(data_bytes)
+    except Exception as e:
+        print(f"Failed to decode Sui key: {e}")
+        return None
+
 # BCS Encoding helpers
 def encode_uleb128(value: int) -> bytes:
     """Encode unsigned LEB128"""
@@ -130,13 +212,48 @@ class SuiRPCClient:
     def _load_key(self):
         """Load Ed25519 private key"""
         try:
-            key_hex = self.private_key.replace("0x", "")
-            key_bytes = bytes.fromhex(key_hex)
+            key_hex = self.private_key.strip()
+            
+            # Check if it's Sui bech32 format (suiprivkey1...)
+            if key_hex.startswith("suiprivkey1"):
+                print("Detected Sui bech32 key format, decoding...")
+                key_bytes = decode_sui_private_key(key_hex)
+                if key_bytes is None:
+                    raise ValueError("Failed to decode Sui bech32 key")
+            else:
+                # Remove 0x prefix if present
+                key_hex = key_hex.replace("0x", "")
+                
+                # Validate hex string
+                if not key_hex:
+                    raise ValueError("Private key is empty")
+                
+                # Check if it's a valid hex string
+                try:
+                    key_bytes = bytes.fromhex(key_hex)
+                except ValueError:
+                    print(f"Private key contains non-hex characters. Length: {len(key_hex)}")
+                    raise ValueError("Private key must be hexadecimal")
+            
+            # Ed25519 private key should be 32 bytes
+            if len(key_bytes) != 32:
+                print(f"Private key length: {len(key_bytes)} bytes (expected 32 bytes)")
+                if len(key_bytes) > 32:
+                    # Try truncating to 32 bytes
+                    key_bytes = key_bytes[:32]
+                    print("Truncating private key to 32 bytes")
+                else:
+                    # Try padding with zeros
+                    key_bytes = key_bytes.ljust(32, b'\x00')
+                    print("Padding private key to 32 bytes")
+            
             self.signing_key = ed25519.Ed25519PrivateKey.from_private_bytes(key_bytes)
             self.public_key = self.signing_key.public_key()
             self.address = self._get_address_from_public_key()
+            print(f"Private key loaded successfully. Address: {self.address}")
         except Exception as e:
             print(f"Failed to load private key: {e}")
+            print(f"Private key value (first 16 chars): {self.private_key[:16] if self.private_key else 'None'}")
             self.signing_key = None
     
     def _get_address_from_public_key(self) -> str:
