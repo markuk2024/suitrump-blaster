@@ -125,10 +125,18 @@ def _ensure_data_dir():
         os.makedirs(data_dir, exist_ok=True)
 
 
-def _parse_entry_fee_to_mist(entry_fee: str) -> int:
+def _parse_entry_fee_to_mist(entry_fee) -> int:
     if not entry_fee:
         return config.POOL_ENTRY_FEE
-    cleaned = "".join(ch for ch in entry_fee if ch.isdigit() or ch == ".")
+    # Handle both string and integer entry fees
+    if isinstance(entry_fee, (int, float)):
+        # If already a number, assume it's in mist if large, or SUI if small
+        if entry_fee > 1000:
+            return int(entry_fee)
+        else:
+            return int(entry_fee * 1_000_000_000)
+    # String handling
+    cleaned = "".join(ch for ch in str(entry_fee) if ch.isdigit() or ch == ".")
     try:
         value = float(cleaned)
     except ValueError:
