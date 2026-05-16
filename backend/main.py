@@ -325,8 +325,6 @@ class SuiRPCClient:
     def _normalize_move_arg(self, arg):
         if isinstance(arg, list):
             return [self._normalize_move_arg(item) for item in arg]
-        if isinstance(arg, int):
-            return arg
         return str(arg)
     
     async def execute_move_call(self, target: str, arguments: list = None, type_arguments: list = None):
@@ -951,7 +949,7 @@ async def call_smart_contract(function: str, args: list):
                     winners = args[1] if len(args) > 1 else []
                     
                     winner_addresses = [w[0] for w in winners]
-                    winner_amounts = [int(w[1]) for w in winners]
+                    winner_amounts = [str(int(w[1])) for w in winners]
                     arguments = [pool_id, winner_addresses, winner_amounts]
                     
                     # Execute via RPC
