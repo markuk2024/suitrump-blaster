@@ -18,6 +18,8 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
+SWAP_WORKER_PATH = os.path.join(os.path.dirname(__file__), "swap_worker", "cetus_swap_worker.mjs")
+
 # Bech32 decoding for Sui keys
 try:
     import bech32
@@ -800,6 +802,49 @@ async def get_sui_balance(address: str) -> float:
     except Exception as e:
         print(f"Error getting balance: {e}")
         return 0
+
+async def run_cetus_suitrump_worker(pool_id: str, amount_mist: int, winners: list):
+    request = {
+        "rpcUrl": config.SUI_NETWORK,
+        "adminPrivateKey": config.ADMIN_PRIVATE_KEY.strip() if config.ADMIN_PRIVATE_KEY else "",
+        "packageId": config.PACKAGE_ID,
+        "poolObjectId": pool_data[pool_id].get("contract_id", "0x0"),
+        "inputCoinType": "0x2::sui::SUI",
+        "targetCoinType": config.SUITRUMP_TYPE,
+        "amountIn": str(int(amount_mist)),
+        "slippage": float(os.getenv("CETUS_SWAP_SLIPPAGE", "0.03")),
+        "devFeePercentage": config.DEV_FEE_PERCENTAGE,
+        "devWallet": config.DEV_WALLET_ADDRESS,
+        "winners": [{"wallet": wallet, "amount": str(int(amount))} for wallet, amount in winners],
+    }
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "node",
+            SWAP_WORKER_PATH,
+            json.dumps(request),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=os.path.dirname(__file__),
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
+        stdout_text = stdout.decode().strip()
+        stderr_text = stderr.decode().strip()
+        output_text = stdout_text or stderr_text
+        if proc.returncode != 0:
+            print(f"CETUS WORKER ERROR: {stderr_text or stdout_text}")
+            return {"status": "error", "message": stderr_text or stdout_text}
+        result = json.loads(output_text.splitlines()[-1])
+        return {
+            "status": result.get("status", "error"),
+            "transaction_id": result.get("digest", ""),
+            "message": "Cetus SUITRUMP swap and distribution executed",
+            "is_real": bool(result.get("digest")),
+            "worker_result": result,
+        }
+    except Exception as e:
+        print(f"CETUS WORKER FAILED: {e}")
+        return {"status": "error", "message": str(e)}
 
 async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
     """Fetch the live escrow balance stored in the pool's dynamic field."""

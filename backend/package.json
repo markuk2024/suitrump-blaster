@@ -1,0 +1,14 @@
+{
+  "name": "suitrump-backend-swap-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cetus:swap": "node swap_worker/cetus_swap_worker.mjs"
+  },
+  "dependencies": {
+    "@cetusprotocol/aggregator-sdk": "latest",
+    "@mysten/sui": "latest",
+    "bn.js": "^5.2.1"
+  }
+}

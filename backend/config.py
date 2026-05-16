@@ -62,6 +62,7 @@ class Config:
     SUITRUMP_TOKEN_PACKAGE: str = os.getenv("SUITRUMP_TOKEN_PACKAGE", "0x0")
     SUITRUMP_TOKEN_MODULE: str = os.getenv("SUITRUMP_TOKEN_MODULE", "suitrump")
     SUITRUMP_TOKEN_NAME: str = os.getenv("SUITRUMP_TOKEN_NAME", "SUITRUMP")
+    SUITRUMP_TYPE: str = os.getenv("SUITRUMP_TYPE", SUITRUMP_TYPE)
     
     # Cetus Configuration
     CETUS_SUI_SUITRUMP_POOL_ID: str = os.getenv("CETUS_SUI_SUITRUMP_POOL_ID", "0x2c2bbe5623c66e9ddf39185d3ab5528493c904b89c415df991aeed73c2427aa9")
