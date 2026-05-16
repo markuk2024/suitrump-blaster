@@ -325,7 +325,7 @@ class SuiRPCClient:
         # Try to execute via executeTransactionBlock with BCS-encoded signing
         try:
             # Get gas objects for the sender - use correct RPC method
-            gas_result = await self._rpc_call("sui_getCoins", [self.address, "0x2::sui::SUI", None, None])
+            gas_result = await self._rpc_call("suix_getCoins", [self.address, "0x2::sui::SUI", None, None])
             
             if "error" in gas_result:
                 print(f"RPC Error getting coins: {gas_result['error']}")
