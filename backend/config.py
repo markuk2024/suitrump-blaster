@@ -65,6 +65,7 @@ class Config:
     
     # Cetus Configuration
     CETUS_SUI_SUITRUMP_POOL_ID: str = os.getenv("CETUS_SUI_SUITRUMP_POOL_ID", "0x2c2bbe5623c66e9ddf39185d3ab5528493c904b89c415df991aeed73c2427aa9")
+    REQUIRE_SUITRUMP_PAYOUTS: bool = os.getenv("REQUIRE_SUITRUMP_PAYOUTS", "true").lower() == "true"
     
     # Real On-chain Pool Object IDs
     DAILY_POOL_ID: str = os.getenv("DAILY_POOL_ID", "0x478672bbf8512f9403d029df4adb5e1e386bd9d23ff318e14f47136035df5597")

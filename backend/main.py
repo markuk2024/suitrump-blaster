@@ -515,6 +515,7 @@ class ScoreSubmit(BaseModel):
 class PayoutRequest(BaseModel):
     pool_id: str
     num_winners: int = 10  # Number of top players to pay out
+    allow_sui_fallback: bool = False
 
 # Data persistence
 DATA_FILE = os.getenv("DATA_FILE", "/var/data/sui/data.json")
@@ -1722,6 +1723,14 @@ async def perform_reward_distribution(data: PayoutRequest):
         swap_amount_mist = prize_amount_mist
         
         # Check if swap is configured
+        if config.REQUIRE_SUITRUMP_PAYOUTS and not data.allow_sui_fallback:
+            return {
+                "status": "error",
+                "message": "SUITRUMP payouts are required, but the Cetus swap transaction builder is not implemented in this Python backend. Escrow remains on-chain for retry after swap integration.",
+                "requires_suitrump": True,
+                "escrow_balance_mist": prize_amount_mist
+            }
+        
         if False and swap_amount_mist > 0 and config.CETUS_SUI_SUITRUMP_POOL_ID:
             print(f"PAYOUT: Attempting automatic swap - {swap_amount_mist / 1_000_000_000} SUI to SUITRUMP")
             
