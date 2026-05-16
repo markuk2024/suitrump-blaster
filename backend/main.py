@@ -2110,8 +2110,8 @@ def get_dev_fees():
 async def get_pool_escrow_balance(pool_object_id: str):
     """Query actual escrow balance from pool Move object on-chain"""
     try:
-        # First try the generic sync function
-        result = await sync_pool_escrow_balance(pool_object_id)
+        # First try the generic on-chain balance function
+        result = await fetch_pool_balance_onchain(pool_object_id)
         if result is not None:
             return result
 
