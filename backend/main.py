@@ -2023,6 +2023,8 @@ async def perform_reward_distribution(data: PayoutRequest):
                 "dev_fee": dev_fee_mist / 1_000_000_000,
                 "payouts": payouts,
                 "contract_transaction": contract_result["transaction_id"],
+                "transaction_id": contract_result["transaction_id"],
+                "is_real": contract_result.get("is_real", False),
                 "message": f"Rewards distributed via smart contract (simulated: {contract_result.get('status') == 'simulated'})"
             }
         else:
