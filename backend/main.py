@@ -807,7 +807,7 @@ async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
 
     # 1. Try generic dynamic field discovery (best for upgraded packages)
     try:
-        fields_resp = await call_sui_rpc("sui_getDynamicFields", [pool_object_id, None, 50])
+        fields_resp = await call_sui_rpc("suix_getDynamicFields", [pool_object_id, None, 50])
         field_entries = fields_resp.get("result", {}).get("data", [])
         
         for entry in field_entries:
@@ -1170,13 +1170,6 @@ async def auto_distribute_task():
         except Exception as e:
             print(f"AUTOMATION ERROR: {e}")
             await asyncio.sleep(60)
-
-@app.on_event("startup")
-async def startup_event():
-    """Load data from file and start automation on startup"""
-    load_data()
-    # Start the background task
-    asyncio.create_task(auto_distribute_task())
 
 @app.post("/submit-score")
 def submit_score(data: ScoreData):
