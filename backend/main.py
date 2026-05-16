@@ -320,6 +320,11 @@ class SuiRPCClient:
             format=serialization.PublicFormat.Raw
         )
         return base64.b64encode(bytes([0]) + signature + public_key).decode("utf-8")
+
+    def _normalize_move_arg(self, arg):
+        if isinstance(arg, list):
+            return [self._normalize_move_arg(item) for item in arg]
+        return str(arg)
     
     async def execute_move_call(self, target: str, arguments: list = None, type_arguments: list = None):
         """Execute a Move call via RPC with proper BCS signing"""
@@ -360,7 +365,7 @@ class SuiRPCClient:
                     target_parts[1],
                     target_parts[2],
                     type_arguments or [],
-                    [str(arg) for arg in (arguments or [])],
+                    [self._normalize_move_arg(arg) for arg in (arguments or [])],
                     gas_object_id,
                     "100000000"
                 ]
@@ -938,12 +943,9 @@ async def call_smart_contract(function: str, args: list):
                     pool_id = args[0] if len(args) > 0 else "0x0"
                     winners = args[1] if len(args) > 1 else []
                     
-                    # Build arguments list for Move call
-                    arguments = [pool_id]
-                    for w in winners:
-                        arguments.append(w[0])
-                    for w in winners:
-                        arguments.append(str(int(w[1])))
+                    winner_addresses = [w[0] for w in winners]
+                    winner_amounts = [str(int(w[1])) for w in winners]
+                    arguments = [pool_id, winner_addresses, winner_amounts]
                     
                     # Execute via RPC
                     result = await client.execute_move_call(
@@ -1721,7 +1723,7 @@ async def perform_reward_distribution(data: PayoutRequest):
         swap_amount_mist = prize_amount_mist
         
         # Check if swap is configured
-        if swap_amount_mist > 0 and config.CETUS_SUI_SUITRUMP_POOL_ID:
+        if False and swap_amount_mist > 0 and config.CETUS_SUI_SUITRUMP_POOL_ID:
             print(f"PAYOUT: Attempting automatic swap - {swap_amount_mist / 1_000_000_000} SUI to SUITRUMP")
             
             # Step 1: Withdraw SUI from escrow
