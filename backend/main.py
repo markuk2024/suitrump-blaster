@@ -357,7 +357,8 @@ class SuiRPCClient:
             if len(target_parts) != 3:
                 raise Exception(f"Invalid Move target: {target}")
 
-            gas_object_id = gas_objects[0]["coinObjectId"]
+            normalized_args = [self._normalize_move_arg(arg) for arg in (arguments or [])]
+            print(f"SUI MOVE CALL: target={target}, args={normalized_args}")
             build_result = await self._rpc_call(
                 "unsafe_moveCall",
                 [
@@ -366,8 +367,8 @@ class SuiRPCClient:
                     target_parts[1],
                     target_parts[2],
                     type_arguments or [],
-                    [self._normalize_move_arg(arg) for arg in (arguments or [])],
-                    gas_object_id,
+                    normalized_args,
+                    None,
                     "100000000"
                 ]
             )
