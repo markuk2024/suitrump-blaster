@@ -308,6 +308,18 @@ class SuiRPCClient:
             format=serialization.PublicFormat.Raw
         )
         return "0x" + (flag + sig_bytes).hex()
+
+    def _sign_tx_bytes(self, tx_bytes: str) -> str:
+        if not self.signing_key:
+            raise Exception("Private key not loaded")
+
+        message = bytes([0, 0, 0]) + base64.b64decode(tx_bytes)
+        signature = self.signing_key.sign(message)
+        public_key = self.public_key.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
+        return base64.b64encode(bytes([0]) + signature + public_key).decode("utf-8")
     
     async def execute_move_call(self, target: str, arguments: list = None, type_arguments: list = None):
         """Execute a Move call via RPC with proper BCS signing"""
@@ -322,48 +334,56 @@ class SuiRPCClient:
             "type_arguments": type_arguments or []
         }
         
-        # Try to execute via executeTransactionBlock with BCS-encoded signing
+        # Try to execute via Sui RPC transaction builder and signed tx bytes
         try:
-            # Get gas objects for the sender - use correct RPC method
             gas_result = await self._rpc_call("suix_getCoins", [self.address, "0x2::sui::SUI", None, None])
             
             if "error" in gas_result:
                 print(f"RPC Error getting coins: {gas_result['error']}")
-                return await self._simulate_transaction(tx_kind)
+                return {"status": "error", "error": gas_result["error"]}
             
             gas_objects = gas_result.get("result", {}).get("data", [])
             if not gas_objects:
                 print(f"No gas objects found for address {self.address}")
-                return await self._simulate_transaction(tx_kind)
-            
-            # Use first gas object
+                return {"status": "error", "message": "No gas objects found"}
+
+            target_parts = target.split("::")
+            if len(target_parts) != 3:
+                raise Exception(f"Invalid Move target: {target}")
+
             gas_object_id = gas_objects[0]["coinObjectId"]
+            build_result = await self._rpc_call(
+                "unsafe_moveCall",
+                [
+                    self.address,
+                    target_parts[0],
+                    target_parts[1],
+                    target_parts[2],
+                    type_arguments or [],
+                    [str(arg) for arg in (arguments or [])],
+                    gas_object_id,
+                    "100000000"
+                ]
+            )
+
+            if "error" in build_result:
+                print(f"Transaction build error: {build_result['error']}")
+                return {"status": "error", "error": build_result["error"]}
+
+            tx_bytes = build_result.get("result", {}).get("txBytes")
+            if not tx_bytes:
+                print(f"No txBytes in build result: {build_result}")
+                return {"status": "error", "message": "No txBytes returned"}
+
+            signature = self._sign_tx_bytes(tx_bytes)
             
-            # Build transaction data with proper structure for Sui RPC
-            transaction_data = {
-                "kind": "moveCall",
-                "target": target,
-                "arguments": arguments or [],
-                "type_arguments": type_arguments or [],
-                "sender": self.address,
-                "gasData": {
-                    "payment": [{"objectId": gas_object_id, "version": gas_objects[0].get("version", 1), "digest": gas_objects[0].get("digest", "0x0000000000000000000000000000000000000000000000000000000000000000")}],
-                    "owner": self.address,
-                    "price": "1000",
-                    "budget": "10000000"
-                }
-            }
-            
-            # Sign transaction with BCS encoding
-            signature = self._sign_transaction(transaction_data)
-            
-            # Execute transaction via RPC
             result = await self._rpc_call(
                 "sui_executeTransactionBlock",
                 [
-                    transaction_data,
+                    tx_bytes,
                     [signature],
-                    {"showEffects": True, "showEvents": True}
+                    {"showEffects": True, "showEvents": True},
+                    "WaitForLocalExecution"
                 ]
             )
             
