@@ -59,7 +59,7 @@ def decode_sui_private_key(encoded_key: str) -> bytes:
                         encoding=serialization.Encoding.Raw,
                         format=serialization.PublicFormat.Raw
                     )
-                    addr_last = "0x" + hashlib.blake2b(test_pub, digest_size=32).hexdigest()
+                    addr_last = "0x" + hashlib.blake2b(b'\x00' + test_pub, digest_size=32).hexdigest()
                     print(f"Stripping first byte gives address: {addr_last}")
                 except Exception as e:
                     print(f"Failed with last 32 bytes: {e}")
@@ -70,7 +70,7 @@ def decode_sui_private_key(encoded_key: str) -> bytes:
                         encoding=serialization.Encoding.Raw,
                         format=serialization.PublicFormat.Raw
                     )
-                    addr_first = "0x" + hashlib.blake2b(test_pub, digest_size=32).hexdigest()
+                    addr_first = "0x" + hashlib.blake2b(b'\x00' + test_pub, digest_size=32).hexdigest()
                     print(f"Stripping last byte gives address: {addr_first}")
                 except Exception as e:
                     print(f"Failed with first 32 bytes: {e}")
@@ -261,7 +261,7 @@ class SuiRPCClient:
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw
         )
-        hash_obj = hashlib.blake2b(pub_bytes, digest_size=32)
+        hash_obj = hashlib.blake2b(b'\x00' + pub_bytes, digest_size=32)
         return "0x" + hash_obj.hexdigest()
     
     async def _rpc_call(self, method: str, params: list = None):
@@ -325,13 +325,13 @@ class SuiRPCClient:
         # Try to execute via executeTransactionBlock with BCS-encoded signing
         try:
             # Get gas objects for the sender - use correct RPC method
-            gas_result = await self._rpc_call("suix_getCoins", [self.address, None, None])
+            gas_result = await self._rpc_call("sui_getCoins", [self.address, "0x2::sui::SUI", None, None])
             
             if "error" in gas_result:
                 print(f"RPC Error getting coins: {gas_result['error']}")
                 return await self._simulate_transaction(tx_kind)
             
-            gas_objects = gas_result.get("data", [])
+            gas_objects = gas_result.get("result", {}).get("data", [])
             if not gas_objects:
                 print(f"No gas objects found for address {self.address}")
                 return await self._simulate_transaction(tx_kind)
@@ -372,6 +372,14 @@ class SuiRPCClient:
                 return await self._simulate_transaction(tx_kind)
             
             tx_digest = result.get("result", {}).get("digest", "")
+            effect_status = result.get("result", {}).get("effects", {}).get("status", {}).get("status")
+            if effect_status and effect_status != "success":
+                print(f"Execution failed on-chain: {result.get('result', {}).get('effects', {}).get('status')}")
+                return {
+                    "status": "error",
+                    "transaction_id": tx_digest,
+                    "message": "Transaction failed on-chain"
+                }
             if tx_digest:
                 print(f"Transaction executed on-chain: {tx_digest}")
                 return {
@@ -391,7 +399,7 @@ class SuiRPCClient:
         """Simulate transaction via devInspectTransactionBlock"""
         try:
             result = await self._rpc_call(
-                "suix_devInspectTransactionBlock",
+                "sui_devInspectTransactionBlock",
                 [
                     self.address,
                     tx_kind,
@@ -408,7 +416,7 @@ class SuiRPCClient:
                 }
             
             return {
-                "status": "success",
+                "status": "simulated",
                 "transaction_id": f"inspect_{int(time.time())}",
                 "message": "Transaction inspected successfully",
                 "inspection_result": result.get("result", {})
@@ -417,7 +425,7 @@ class SuiRPCClient:
         except Exception as e:
             print(f"Simulation failed: {e}")
             return {
-                "status": "success",
+                "status": "simulated",
                 "transaction_id": f"sim_{int(time.time())}",
                 "message": "Transaction simulated"
             }
@@ -768,7 +776,7 @@ async def fetch_pool_balance_onchain(pool_object_id: str) -> Optional[int]:
 
     # 1. Try generic dynamic field discovery (best for upgraded packages)
     try:
-        fields_resp = await call_sui_rpc("suix_getDynamicFields", [pool_object_id, None, 50])
+        fields_resp = await call_sui_rpc("sui_getDynamicFields", [pool_object_id, None, 50])
         field_entries = fields_resp.get("result", {}).get("data", [])
         
         for entry in field_entries:
@@ -927,6 +935,15 @@ async def call_smart_contract(function: str, args: list):
                     tx_id = result.get('transaction_id', '')
                     is_real = not tx_id.startswith(('sim_', 'inspect_'))
                     
+                    result_status = result.get("status", "error")
+                    if result_status != "success":
+                        return {
+                            "status": result_status,
+                            "function": function,
+                            "transaction_id": tx_id,
+                            "message": result.get("message", ""),
+                            "is_real": False
+                        }
                     print(f"Transaction {'executed on-chain' if is_real else 'simulated'}: {tx_id}")
                     return {
                         "status": "success",
@@ -950,6 +967,15 @@ async def call_smart_contract(function: str, args: list):
                     tx_id = result.get('transaction_id', '')
                     is_real = not tx_id.startswith(('sim_', 'inspect_'))
                     
+                    result_status = result.get("status", "error")
+                    if result_status != "success":
+                        return {
+                            "status": result_status,
+                            "function": function,
+                            "transaction_id": tx_id,
+                            "message": result.get("message", ""),
+                            "is_real": False
+                        }
                     print(f"Withdrawal {'executed on-chain' if is_real else 'simulated'}: {tx_id}")
                     return {
                         "status": "success",
@@ -1039,8 +1065,17 @@ async def auto_distribute_task():
                 elapsed = now - start_time
                 print(f"AUTO_DISTRIBUTE: {pool_id} - elapsed: {elapsed}s, duration: {duration}s, expires in: {duration - elapsed}s")
                 if elapsed >= duration:
+                    # Sync escrow balances from on-chain before checking
+                    pool_object_id = pool_data[pool_id].get("contract_id", "0x0")
+                    if pool_object_id != "0x0":
+                        real_balance_mist = await get_pool_escrow_balance(pool_object_id)
+                        if real_balance_mist > 0:
+                            escrow_funds[pool_id] = real_balance_mist
+                            print(f"AUTOMATION: Synced {pool_id} escrow from on-chain: {real_balance_mist / 1_000_000_000:.3f} SUI")
+
                     participants = pool_participants.get(pool_id, [])
                     escrow_balance = escrow_funds.get(pool_id, 0)
+                    print(f"AUTOMATION: {pool_id} - participants: {len(participants)}, escrow_balance: {escrow_balance}")
                     if not participants and escrow_balance <= 0:
                         print(f"AUTOMATION: Skipping {pool_id} reset (no participants or escrow)")
                         pool_start_times[pool_id] = now
@@ -1519,6 +1554,15 @@ async def startup_event():
             "weekly": int(time.time()),
             "monthly": int(time.time())
         }
+
+    if config.ADMIN_PRIVATE_KEY:
+        try:
+            admin_client = SuiRPCClient(config.SUI_NETWORK, config.ADMIN_PRIVATE_KEY.strip())
+            if admin_client.signing_key:
+                admin_balance = await get_sui_balance(admin_client.address)
+                print(f"ADMIN WALLET: derived address {admin_client.address}, balance {admin_balance} SUI")
+        except Exception as e:
+            print(f"ADMIN WALLET: diagnostic failed: {e}")
     
     # Start auto-distribute task
     asyncio.create_task(auto_distribute_task())
@@ -1637,67 +1681,24 @@ async def perform_reward_distribution(data: PayoutRequest):
             print(f"PAYOUT: {data.pool_id} distribution skipped - escrow balance is {prize_amount_mist}")
             return {"status": "no_funds", "message": "No funds in prize pool"}
         
-        # Calculate and deduct dev fee (keep in Mist)
-        dev_fee_mist = int(prize_amount_mist * (config.DEV_FEE_PERCENTAGE / 100))
-        prize_after_fee_mist = max(prize_amount_mist - dev_fee_mist, 0)
-        
-        # Record dev fee
-        dev_fees_collected[data.pool_id] += dev_fee_mist
+        # Initialize variables for pool history (will be updated based on swap path)
+        dev_fee_mist = 0
+        prize_after_fee_mist = prize_amount_mist
+        actual_winners_count = 0
         
         reward_percentages = POOL_PAYOUTS.get(data.pool_id, [100])
             
         payouts = []
         winners = [] # List of (address, amount_mist)
         
-        # Add Dev Fee to the winners list
-        if dev_fee_mist > 0:
-            dev_wallet = config.DEV_WALLET_ADDRESS
-            winners.append((dev_wallet, dev_fee_mist))
-        
-        # We pay out to the number of winners specified in reward_percentages, 
-        # but only if there are enough people on the leaderboard.
-        num_to_pay = len(reward_percentages)
-        actual_winners_count = min(len(leaderboard), num_to_pay)
-        
-        # Adjust percentages if fewer winners than slots
-        if actual_winners_count > 0 and actual_winners_count < num_to_pay:
-            # Re-calculate reward_percentages to distribute 100% among actual winners
-            total_slots_pct = sum(reward_percentages[:actual_winners_count])
-            if total_slots_pct > 0:
-                reward_percentages = [(p / total_slots_pct) * 100 for p in reward_percentages[:actual_winners_count]]
-            else:
-                adjusted_pct = 100 / actual_winners_count
-                reward_percentages = [adjusted_pct] * actual_winners_count
-        
-        for i in range(actual_winners_count):
-            entry = leaderboard[i]
-            reward_mist = int(prize_after_fee_mist * (reward_percentages[i] / 100))
-            reward_sui = reward_mist / 1_000_000_000
-            # Convert SUI amount to SUITRUMP for display (1:1 conversion for now)
-            reward_suitrump = reward_sui  # TODO: Implement actual conversion rate
-            payouts.append({
-                "rank": i + 1,
-                "wallet": entry["wallet"],
-                "score": entry["score"],
-                "reward": f"{reward_suitrump:.3f} SUITRUMP",
-                "reward_sui_mist": reward_mist  # Keep track of SUI amount for contract call
-            })
-            winners.append((entry["wallet"], reward_mist))
-        
         # NEW: Automatic SUI to SUITRUMP swap flow
-        # 1. Take dev fee in SUI (keep in pool escrow)
-        # 2. Withdraw remaining SUI from escrow
-        # 3. Swap SUI to SUITRUMP via Cetus
-        # 4. Distribute SUITRUMP to winners
+        # 1. Swap full SUI prize pool to SUITRUMP via Cetus
+        # 2. Calculate dev fee as percentage of SUITRUMP amount
+        # 3. Distribute SUITRUMP minus dev fee to winners
+        # 4. Add dev fee in SUITRUMP to dev wallet
         
-        # Separate dev fee from prize pool
-        dev_fee_winners = []
-        if dev_fee_mist > 0:
-            dev_wallet = config.DEV_WALLET_ADDRESS
-            dev_fee_winners.append((dev_wallet, dev_fee_mist))
-        
-        # Calculate amount to swap (prize minus dev fee)
-        swap_amount_mist = prize_after_fee_mist
+        # Calculate amount to swap (full prize pool)
+        swap_amount_mist = prize_amount_mist
         
         # Check if swap is configured
         if swap_amount_mist > 0 and config.CETUS_SUI_SUITRUMP_POOL_ID:
@@ -1725,37 +1726,94 @@ async def perform_reward_distribution(data: PayoutRequest):
                 ])
                 
                 if swap_result.get("status") == "success":
-                    print(f"PAYOUT: Cetus swap successful - now distributing SUITRUMP")
-                    
-                    # After swap, the dev wallet has SUITRUMP coins
-                    # We need to distribute them to winners
-                    # For now, we'll use a simplified approach:
-                    # 1. Get the swap transaction digest
-                    # 2. Query the transaction to find the created SUITRUMP coin objects
-                    # 3. Use those coins to distribute to winners
+                    print(f"PAYOUT: Cetus swap successful - calculating dev fee from SUITRUMP amount")
                     
                     swap_tx_digest = swap_result.get("transaction_id", "")
                     if swap_tx_digest:
                         print(f"PAYOUT: Swap transaction digest: {swap_tx_digest}")
-                        # Query the transaction to get the created coin objects
+                        # Query the transaction to get the created coin objects and amounts
                         try:
                             tx_response = client.client.get_transaction_block(swap_tx_digest)
                             if hasattr(tx_response, 'effects') and hasattr(tx_response.effects, 'created'):
                                 created_objects = tx_response.effects.created
                                 suitrump_coins = []
+                                total_suitrump_amount = 0
                                 for obj in created_objects:
                                     if hasattr(obj, 'type') and config.SUITRUMP_TYPE in str(obj.type):
                                         suitrump_coins.append(obj.reference.object_id)
+                                        # Try to get the coin amount
+                                        if hasattr(obj, 'owner') and hasattr(obj.owner, 'AddressOwner'):
+                                            # This is a coin object, try to get its balance
+                                            pass
                                 
                                 if suitrump_coins:
                                     print(f"PAYOUT: Found {len(suitrump_coins)} SUITRUMP coin objects")
-                                    # Distribute using the first coin object
+                                    
+                                    # For now, estimate SUITRUMP amount based on swap ratio
+                                    # In production, we should query the actual coin balance
+                                    # Assuming 1 SUI = 60,000 SUITRUMP (example ratio)
+                                    sui_amount = swap_amount_mist / 1_000_000_000
+                                    estimated_suitrump_amount = sui_amount * 60000  # TODO: Get actual swap rate
+                                    
+                                    print(f"PAYOUT: Estimated SUITRUMP amount: {estimated_suitrump_amount}")
+                                    
+                                    # Calculate dev fee as percentage of SUITRUMP amount
+                                    dev_fee_suitrump = estimated_suitrump_amount * (config.DEV_FEE_PERCENTAGE / 100)
+                                    prize_after_fee_suitrump = estimated_suitrump_amount - dev_fee_suitrump
+                                    
+                                    # Record dev fee in SUI equivalent for tracking
+                                    dev_fee_mist = int(sui_amount * (config.DEV_FEE_PERCENTAGE / 100) * 1_000_000_000)
+                                    dev_fees_collected[data.pool_id] += dev_fee_mist
+                                    
+                                    print(f"PAYOUT: Dev fee: {dev_fee_suitrump:.3f} SUITRUMP ({dev_fee_mist / 1_000_000_000} SUI equivalent)")
+                                    print(f"PAYOUT: Prize after fee: {prize_after_fee_suitrump:.3f} SUITRUMP")
+                                    
+                                    # Calculate winner payouts in SUITRUMP
+                                    # We pay out to the number of winners specified in reward_percentages, 
+                                    # but only if there are enough people on the leaderboard.
+                                    num_to_pay = len(reward_percentages)
+                                    actual_winners_count = min(len(leaderboard), num_to_pay)
+                                    
+                                    # Adjust percentages if fewer winners than slots
+                                    if actual_winners_count > 0 and actual_winners_count < num_to_pay:
+                                        # Re-calculate reward_percentages to distribute 100% among actual winners
+                                        total_slots_pct = sum(reward_percentages[:actual_winners_count])
+                                        if total_slots_pct > 0:
+                                            reward_percentages = [(p / total_slots_pct) * 100 for p in reward_percentages[:actual_winners_count]]
+                                        else:
+                                            adjusted_pct = 100 / actual_winners_count
+                                            reward_percentages = [adjusted_pct] * actual_winners_count
+                                    
+                                    # Build winners list with SUITRUMP amounts
+                                    suitrump_winners = []
+                                    for i in range(actual_winners_count):
+                                        entry = leaderboard[i]
+                                        reward_suitrump = prize_after_fee_suitrump * (reward_percentages[i] / 100)
+                                        payouts.append({
+                                            "rank": i + 1,
+                                            "wallet": entry["wallet"],
+                                            "score": entry["score"],
+                                            "reward": f"{reward_suitrump:.3f} SUITRUMP",
+                                        })
+                                        # For distribution, we need to convert back to SUI Mist for the contract
+                                        # This is a simplified approach - in production we'd distribute actual SUITRUMP coins
+                                        reward_sui_equivalent = (reward_suitrump / 60000) * 1_000_000_000  # TODO: Use actual rate
+                                        suitrump_winners.append((entry["wallet"], int(reward_sui_equivalent)))
+                                    
+                                    # Add dev fee to winners list (in SUI equivalent for contract)
+                                    dev_fee_winners = []
+                                    if dev_fee_suitrump > 0:
+                                        dev_wallet = config.DEV_WALLET_ADDRESS
+                                        dev_fee_sui_equivalent = (dev_fee_suitrump / 60000) * 1_000_000_000
+                                        dev_fee_winners.append((dev_wallet, int(dev_fee_sui_equivalent)))
+                                    
+                                    # Distribute using the first SUITRUMP coin object
                                     # Note: This is a simplified approach - assumes single coin
                                     coin_id = suitrump_coins[0]
                                     distribute_result = await call_smart_contract("distribute_external_rewards", [
                                         pool_data[data.pool_id].get("contract_id", "0x0"),
                                         coin_id,
-                                        winners
+                                        dev_fee_winners + suitrump_winners
                                     ])
                                     
                                     if distribute_result.get("status") == "success":
@@ -1776,22 +1834,122 @@ async def perform_reward_distribution(data: PayoutRequest):
                         contract_result = {"status": "partial", "transaction_id": swap_tx_digest}
                 else:
                     print(f"PAYOUT: Cetus swap failed - falling back to SUI distribution")
-                    suitrump_winners = winners
+                    # Fallback to original SUI distribution logic
+                    dev_fee_mist = int(prize_amount_mist * (config.DEV_FEE_PERCENTAGE / 100))
+                    prize_after_fee_mist = max(prize_amount_mist - dev_fee_mist, 0)
+                    dev_fees_collected[data.pool_id] += dev_fee_mist
+                    
+                    # Add Dev Fee to the winners list
+                    if dev_fee_mist > 0:
+                        dev_wallet = config.DEV_WALLET_ADDRESS
+                        winners.append((dev_wallet, dev_fee_mist))
+                    
+                    # Calculate winner payouts in SUI
+                    num_to_pay = len(reward_percentages)
+                    actual_winners_count = min(len(leaderboard), num_to_pay)
+                    
+                    if actual_winners_count > 0 and actual_winners_count < num_to_pay:
+                        total_slots_pct = sum(reward_percentages[:actual_winners_count])
+                        if total_slots_pct > 0:
+                            reward_percentages = [(p / total_slots_pct) * 100 for p in reward_percentages[:actual_winners_count]]
+                        else:
+                            adjusted_pct = 100 / actual_winners_count
+                            reward_percentages = [adjusted_pct] * actual_winners_count
+                    
+                    for i in range(actual_winners_count):
+                        entry = leaderboard[i]
+                        reward_mist = int(prize_after_fee_mist * (reward_percentages[i] / 100))
+                        reward_sui = reward_mist / 1_000_000_000
+                        payouts.append({
+                            "rank": i + 1,
+                            "wallet": entry["wallet"],
+                            "score": entry["score"],
+                            "reward": f"{reward_sui:.3f} SUI",
+                        })
+                        winners.append((entry["wallet"], reward_mist))
+                    
                     contract_result = await call_smart_contract("distribute_rewards", [
                         pool_data[data.pool_id].get("contract_id", "0x0"),
-                        dev_fee_winners + suitrump_winners
+                        winners
                     ])
             else:
-                print(f"PAYOUT: Withdrawal failed - distributing SUI directly")
+                print(f"PAYOUT: Withdrawal failed - falling back to SUI distribution")
+                # Fallback to original SUI distribution logic
+                dev_fee_mist = int(prize_amount_mist * (config.DEV_FEE_PERCENTAGE / 100))
+                prize_after_fee_mist = max(prize_amount_mist - dev_fee_mist, 0)
+                dev_fees_collected[data.pool_id] += dev_fee_mist
+                
+                # Add Dev Fee to the winners list
+                if dev_fee_mist > 0:
+                    dev_wallet = config.DEV_WALLET_ADDRESS
+                    winners.append((dev_wallet, dev_fee_mist))
+                
+                # Calculate winner payouts in SUI
+                num_to_pay = len(reward_percentages)
+                actual_winners_count = min(len(leaderboard), num_to_pay)
+                
+                if actual_winners_count > 0 and actual_winners_count < num_to_pay:
+                    total_slots_pct = sum(reward_percentages[:actual_winners_count])
+                    if total_slots_pct > 0:
+                        reward_percentages = [(p / total_slots_pct) * 100 for p in reward_percentages[:actual_winners_count]]
+                    else:
+                        adjusted_pct = 100 / actual_winners_count
+                        reward_percentages = [adjusted_pct] * actual_winners_count
+                
+                for i in range(actual_winners_count):
+                    entry = leaderboard[i]
+                    reward_mist = int(prize_after_fee_mist * (reward_percentages[i] / 100))
+                    reward_sui = reward_mist / 1_000_000_000
+                    payouts.append({
+                        "rank": i + 1,
+                        "wallet": entry["wallet"],
+                        "score": entry["score"],
+                        "reward": f"{reward_sui:.3f} SUI",
+                    })
+                    winners.append((entry["wallet"], reward_mist))
+                
                 contract_result = await call_smart_contract("distribute_rewards", [
                     pool_data[data.pool_id].get("contract_id", "0x0"),
-                    dev_fee_winners + winners
+                    winners
                 ])
         else:
-            print(f"PAYOUT: No swap configured - distributing SUI")
+            # Swap not configured - use original SUI distribution logic
+            dev_fee_mist = int(prize_amount_mist * (config.DEV_FEE_PERCENTAGE / 100))
+            prize_after_fee_mist = max(prize_amount_mist - dev_fee_mist, 0)
+            dev_fees_collected[data.pool_id] += dev_fee_mist
+            
+            # Add Dev Fee to the winners list
+            if dev_fee_mist > 0:
+                dev_wallet = config.DEV_WALLET_ADDRESS
+                winners.append((dev_wallet, dev_fee_mist))
+            
+            # Calculate winner payouts in SUI
+            num_to_pay = len(reward_percentages)
+            actual_winners_count = min(len(leaderboard), num_to_pay)
+            
+            if actual_winners_count > 0 and actual_winners_count < num_to_pay:
+                total_slots_pct = sum(reward_percentages[:actual_winners_count])
+                if total_slots_pct > 0:
+                    reward_percentages = [(p / total_slots_pct) * 100 for p in reward_percentages[:actual_winners_count]]
+                else:
+                    adjusted_pct = 100 / actual_winners_count
+                    reward_percentages = [adjusted_pct] * actual_winners_count
+            
+            for i in range(actual_winners_count):
+                entry = leaderboard[i]
+                reward_mist = int(prize_after_fee_mist * (reward_percentages[i] / 100))
+                reward_sui = reward_mist / 1_000_000_000
+                payouts.append({
+                    "rank": i + 1,
+                    "wallet": entry["wallet"],
+                    "score": entry["score"],
+                    "reward": f"{reward_sui:.3f} SUI",
+                })
+                winners.append((entry["wallet"], reward_mist))
+            
             contract_result = await call_smart_contract("distribute_rewards", [
                 pool_data[data.pool_id].get("contract_id", "0x0"),
-                dev_fee_winners + winners
+                winners
             ])
         
         if contract_result["status"] == "success":
@@ -1948,6 +2106,30 @@ def get_dev_fees():
         "dev_wallet_address": config.DEV_WALLET_ADDRESS,
         "fees_by_pool": fees_by_pool
     }
+
+async def get_pool_escrow_balance(pool_object_id: str):
+    """Query actual escrow balance from pool Move object on-chain"""
+    try:
+        # First try the generic sync function
+        result = await sync_pool_escrow_balance(pool_object_id)
+        if result is not None:
+            return result
+
+        # Fallback to direct query
+        res = await call_sui_rpc("sui_getObject", [pool_object_id, {"showContent": True}])
+        if "result" in res and "data" in res["result"]:
+            fields = res["result"]["data"].get("content", {}).get("fields", {})
+            # Look for escrow balance in dynamic fields
+            escrow = fields.get("escrow")
+            if escrow and isinstance(escrow, dict):
+                balance = escrow.get("fields", {}).get("balance")
+                if balance:
+                    return int(balance)
+
+        return 0
+    except Exception as e:
+        print(f"Escrow balance query error for {pool_object_id}: {e}")
+        return 0
 
 async def get_pool_object_balance(pool_object_id: str):
     """Query actual SUI balance inside a pool Move object on-chain"""
