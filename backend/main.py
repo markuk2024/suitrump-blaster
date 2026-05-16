@@ -314,7 +314,8 @@ class SuiRPCClient:
             raise Exception("Private key not loaded")
 
         message = bytes([0, 0, 0]) + base64.b64decode(tx_bytes)
-        signature = self.signing_key.sign(message)
+        digest = hashlib.blake2b(message, digest_size=32).digest()
+        signature = self.signing_key.sign(digest)
         public_key = self.public_key.public_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw
@@ -394,7 +395,11 @@ class SuiRPCClient:
             
             if "error" in result:
                 print(f"Execution error: {result['error']}")
-                return await self._simulate_transaction(tx_kind)
+                return {
+                    "status": "error",
+                    "error": result["error"],
+                    "message": "Transaction execution failed"
+                }
             
             tx_digest = result.get("result", {}).get("digest", "")
             effect_status = result.get("result", {}).get("effects", {}).get("status", {}).get("status")
